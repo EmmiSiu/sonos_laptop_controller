@@ -94,30 +94,115 @@ impl Default for ScanConfig {
     }
 }
 
-/// Lists the IPv4 addresses worth probing from.
+/// How likely an interface is to be the one a speaker is on.
+///
+/// The ordering matters twice. During a scan it decides which interface answers first, so the
+/// device list settles sooner. More importantly, anything that has to pick *one* interface —
+/// the `stream` command, a diagnostic — must not pick a virtual switch, because binding a
+/// server there produces a URL nothing on the real network can reach.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum InterfaceKind {
+    /// A physical adapter: Wi-Fi, Ethernet. Where speakers actually live.
+    Physical,
+    /// A hypervisor or container switch: WSL, Hyper-V, Docker, VirtualBox, VMware.
+    ///
+    /// Still probed — nothing stops someone bridging a speaker onto one — but never the
+    /// default choice, and never preferred over a physical adapter.
+    Virtual,
+    /// Loopback. Probed last, and only because the test harness runs the real discovery path
+    /// against a fake responder there.
+    Loopback,
+}
+
+/// An address to probe from, with enough context to rank it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProbeInterface {
+    /// The local address.
+    pub address: Ipv4Addr,
+    /// The OS's name for the adapter.
+    pub name: String,
+    /// What kind of adapter it appears to be.
+    pub kind: InterfaceKind,
+}
+
+/// Substrings that mark an adapter as belonging to a hypervisor or container runtime.
+///
+/// Matching on the name is a heuristic, and it is the only signal available: a WSL switch on
+/// `172.26.80.1` is inside RFC1918 exactly like a home LAN, so the address cannot distinguish
+/// them. The cost of a false positive is small — the interface is still probed, just last.
+const VIRTUAL_MARKERS: [&str; 8] =
+    ["vethernet", "hyper-v", "wsl", "docker", "virtualbox", "vmware", "vmnet", "tailscale"];
+
+/// Classifies an adapter from its name and address.
+#[must_use]
+pub fn classify_interface(name: &str, address: Ipv4Addr) -> InterfaceKind {
+    if address.is_loopback() {
+        return InterfaceKind::Loopback;
+    }
+    let lowered = name.to_ascii_lowercase();
+    if VIRTUAL_MARKERS.iter().any(|marker| lowered.contains(marker)) {
+        return InterfaceKind::Virtual;
+    }
+    InterfaceKind::Physical
+}
+
+/// Lists the interfaces worth probing from, best candidate first.
 ///
 /// Loopback is included deliberately: it is how the test harness runs the real discovery path
 /// against a fake responder in CI, with no hardware and no LAN.
 #[must_use]
-pub fn probe_interfaces() -> Vec<Ipv4Addr> {
+pub fn probe_interfaces_detailed() -> Vec<ProbeInterface> {
     let Ok(interfaces) = if_addrs::get_if_addrs() else {
-        return vec![Ipv4Addr::LOCALHOST];
+        return vec![ProbeInterface {
+            address: Ipv4Addr::LOCALHOST,
+            name: "loopback".to_owned(),
+            kind: InterfaceKind::Loopback,
+        }];
     };
 
-    let mut addresses: Vec<Ipv4Addr> = interfaces
+    let mut found: Vec<ProbeInterface> = interfaces
         .into_iter()
         .filter_map(|iface| match iface.addr.ip() {
-            IpAddr::V4(v4) if !v4.is_unspecified() => Some(v4),
+            IpAddr::V4(v4) if !v4.is_unspecified() => Some(ProbeInterface {
+                kind: classify_interface(&iface.name, v4),
+                address: v4,
+                name: iface.name,
+            }),
             _ => None,
         })
         .collect();
 
-    addresses.sort_unstable();
-    addresses.dedup();
-    if addresses.is_empty() {
-        addresses.push(Ipv4Addr::LOCALHOST);
+    // Physical first, then virtual, then loopback; address order within a kind, so the list is
+    // stable across runs and a test can assert on it.
+    found.sort_by(|a, b| a.kind.cmp(&b.kind).then(a.address.cmp(&b.address)));
+    found.dedup_by(|a, b| a.address == b.address);
+
+    if found.is_empty() {
+        found.push(ProbeInterface {
+            address: Ipv4Addr::LOCALHOST,
+            name: "loopback".to_owned(),
+            kind: InterfaceKind::Loopback,
+        });
     }
-    addresses
+    found
+}
+
+/// Lists the IPv4 addresses worth probing from, best candidate first.
+#[must_use]
+pub fn probe_interfaces() -> Vec<Ipv4Addr> {
+    probe_interfaces_detailed().into_iter().map(|iface| iface.address).collect()
+}
+
+/// The single best interface to bind a server to when no device has been discovered yet.
+///
+/// Returns `None` only when the machine has nothing but loopback, which the caller should
+/// report rather than paper over.
+#[must_use]
+pub fn preferred_lan_interface() -> Option<Ipv4Addr> {
+    probe_interfaces_detailed()
+        .into_iter()
+        .find(|iface| iface.kind == InterfaceKind::Physical)
+        .map(|iface| iface.address)
 }
 
 /// Runs a full discovery scan.
@@ -342,6 +427,74 @@ mod tests {
         // CI harness -- which discovers a fake responder on loopback -- cannot run at all.
         let interfaces = probe_interfaces();
         assert!(!interfaces.is_empty());
+    }
+
+    /// Covers: RQ-DISC-010
+    #[test]
+    fn a_virtual_switch_never_outranks_a_physical_adapter() {
+        // The bug this pins down was found by running `rincon stream` on a laptop with WSL
+        // installed: the old code sorted by address and took the first non-loopback, which is
+        // `172.26.80.1` -- the WSL switch -- ahead of the Wi-Fi on `192.168.0.153`. The server
+        // then bound to a network with nothing on it, and produced a URL no speaker could
+        // reach. It presents as a firewall problem and is miserable to diagnose.
+        assert_eq!(
+            classify_interface(
+                "vEthernet (WSL (Hyper-V firewall))",
+                "172.26.80.1".parse().unwrap()
+            ),
+            InterfaceKind::Virtual
+        );
+        assert_eq!(
+            classify_interface("Wi-Fi", "192.168.0.153".parse().unwrap()),
+            InterfaceKind::Physical
+        );
+        assert_eq!(classify_interface("lo", Ipv4Addr::LOCALHOST), InterfaceKind::Loopback);
+
+        // The ordering is what actually protects the caller.
+        assert!(InterfaceKind::Physical < InterfaceKind::Virtual);
+        assert!(InterfaceKind::Virtual < InterfaceKind::Loopback);
+    }
+
+    #[test]
+    fn every_hypervisor_we_know_about_is_recognised() {
+        for name in [
+            "vEthernet (Default Switch)",
+            "Hyper-V Virtual Ethernet Adapter",
+            "docker0",
+            "VirtualBox Host-Only Network",
+            "VMware Network Adapter VMnet8",
+            "vmnet1",
+            "Tailscale",
+        ] {
+            assert_eq!(
+                classify_interface(name, "10.0.0.1".parse().unwrap()),
+                InterfaceKind::Virtual,
+                "`{name}` should be recognised as virtual"
+            );
+        }
+        // And an ordinary adapter is not caught by the heuristic.
+        for name in ["Wi-Fi", "Ethernet", "wlan0", "eth0", "en0"] {
+            assert_eq!(
+                classify_interface(name, "192.168.1.5".parse().unwrap()),
+                InterfaceKind::Physical,
+                "`{name}` should be physical"
+            );
+        }
+    }
+
+    #[test]
+    fn the_preferred_interface_is_never_loopback_or_virtual() {
+        // `None` is a legitimate answer on a machine with nothing but loopback; what must
+        // never happen is returning an address a speaker cannot route back to.
+        if let Some(address) = preferred_lan_interface() {
+            assert!(!address.is_loopback(), "picked loopback as the LAN interface");
+            let detailed = probe_interfaces_detailed();
+            let picked = detailed
+                .iter()
+                .find(|iface| iface.address == address)
+                .expect("the preferred address must come from the probe list");
+            assert_eq!(picked.kind, InterfaceKind::Physical);
+        }
     }
 
     #[test]

@@ -136,18 +136,18 @@ async fn discover(cli: &Cli) -> Result<()> {
 async fn doctor(cli: &Cli) -> Result<()> {
     println!("Rincon {} — diagnostics\n", rincon_core::VERSION);
 
-    println!("Network interfaces:");
-    for address in rincon_discovery::scan::probe_interfaces() {
-        let kind = if address.is_loopback() {
-            "loopback"
-        } else if address.is_private() {
-            "private"
-        } else if address.is_link_local() {
-            "link-local (no DHCP?)"
-        } else {
-            "public — will not be used"
+    println!("Network interfaces (best candidate first):");
+    for iface in rincon_discovery::scan::probe_interfaces_detailed() {
+        let note = match iface.kind {
+            rincon_discovery::InterfaceKind::Physical => "physical",
+            rincon_discovery::InterfaceKind::Virtual => "virtual switch — deprioritised",
+            rincon_discovery::InterfaceKind::Loopback => "loopback",
         };
-        println!("  {address:<16} {kind}");
+        println!("  {:<16} {:<12} {}", iface.address, note, iface.name);
+    }
+    match rincon_discovery::preferred_lan_interface() {
+        Some(address) => println!("  -> would bind the stream server to {address}"),
+        None => println!("  -> no physical interface; a session would have nowhere to bind"),
     }
 
     println!("\nAudio endpoint:");
@@ -178,20 +178,26 @@ async fn doctor(cli: &Cli) -> Result<()> {
     println!(
         "\nIf a speaker is listed but playback never starts, the firewall is the usual cause."
     );
-    println!("Allow inbound TCP to this program on private networks:");
-    println!("  netsh advfirewall firewall add rule name=\"Rincon\" dir=in action=allow \\");
-    println!("    program=\"%LOCALAPPDATA%\\Programs\\Rincon\\rincon.exe\" profile=private");
+    println!("{}\n", rincon_ipc::FIREWALL_EXPLANATION);
+    for line in rincon_ipc::FIREWALL_COMMANDS.lines() {
+        println!("  {line}");
+    }
+    println!(
+        "\nCheck the network type with:  Get-NetConnectionProfile\n\
+         If your home Wi-Fi says Public, that is the thing to fix first."
+    );
     Ok(())
 }
 
 async fn stream(cli: &Cli, interface: Option<IpAddr>) -> Result<()> {
+    // Deliberately not "the first non-loopback address". On a machine with WSL or Hyper-V
+    // that is a virtual switch, and binding there produces a URL nothing on the real network
+    // can reach -- which looks exactly like a firewall problem.
     let local = match interface {
         Some(address) => address,
-        None => rincon_discovery::scan::probe_interfaces()
-            .into_iter()
-            .find(|address| !address.is_loopback())
+        None => rincon_discovery::preferred_lan_interface()
             .map(IpAddr::V4)
-            .context("no non-loopback interface found; pass --interface")?,
+            .context("no physical network interface found; pass --interface")?,
     };
 
     let session = capture_backend(cli).start().await.context("cannot open the audio endpoint")?;
@@ -204,14 +210,19 @@ async fn stream(cli: &Cli, interface: Option<IpAddr>) -> Result<()> {
         // not for serving a speaker. `play` is the command that does that.
         IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
         format.as_wire(),
-    );
+    )
+    // The bound address too. A player on this machine connecting to `192.168.0.153` arrives
+    // with that as its source address, not `127.0.0.1`, so allowlisting only loopback refuses
+    // the very fetch this command exists to make possible.
+    .allowing(local);
 
     let handle = rincon_stream::bind(config, frames, Arc::clone(&counters))
         .await
         .context("cannot start the stream server")?;
 
     println!("Serving system audio at:\n\n  {}\n", handle.url.as_str());
-    println!("Open that in VLC to verify capture and serving on their own.");
+    println!("  interface: {local}    format: {}", format.as_wire());
+    println!("\nOpen that in VLC to verify capture and serving on their own.");
     println!("Only this machine is allowed to connect. Ctrl-C to stop.\n");
 
     tokio::signal::ctrl_c().await.context("cannot listen for Ctrl-C")?;

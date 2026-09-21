@@ -156,6 +156,40 @@ pub struct SessionDto {
 pub const LATENCY_NOTE: &str =
     "Sonos speakers buffer 1-2 seconds. Great for music; video will look out of sync.";
 
+/// What the interface tells a user whose speaker never connected.
+///
+/// # Why this is two commands and not one
+///
+/// The obvious advice — "allow Rincon through the firewall on private networks" — is wrong on
+/// a surprising number of machines, because Windows classifies plenty of home Wi-Fi networks
+/// as **Public**. A user following it adds a rule for a profile their network is not in,
+/// nothing changes, and they conclude the app is broken.
+///
+/// Worse is the shortcut they reach for next: allowing the app on the Public profile. That
+/// rule then applies in cafés and airports too, where it offers the port serving their system
+/// audio to everyone on the network. It is the one configuration this program must not
+/// encourage, and the reason the advice names the trap explicitly.
+///
+/// So it fixes the cause first — mark the home network Private, which is what it is — and only
+/// then adds a rule scoped to that profile.
+pub const FIREWALL_EXPLANATION: &str = concat!(
+    "Your speaker fetches audio from this computer, so Windows Firewall has to let it in. ",
+    "Check the network type first: Windows often marks home Wi-Fi as Public, and a rule for ",
+    "the wrong profile changes nothing. Do not allow Rincon on Public networks — that would ",
+    "offer your system audio to everyone in a café. Run these in an administrator terminal, ",
+    "replacing the network name with your own.",
+);
+
+/// The exact commands. Shown to the user; never executed by Rincon.
+pub const FIREWALL_COMMANDS: &str = concat!(
+    "# 1. Your home Wi-Fi is a private network, whatever Windows guessed\n",
+    "Set-NetConnectionProfile -Name \"YOUR-WIFI-NAME\" -NetworkCategory Private\n",
+    "\n",
+    "# 2. Let the speaker reach Rincon, on private networks only\n",
+    "New-NetFirewallRule -DisplayName \"Rincon\" -Direction Inbound -Action Allow `\n",
+    "  -Program \"%LOCALAPPDATA%\\Programs\\Rincon\\rincon.exe\" -Profile Private",
+);
+
 /// What the interface needs to help with a firewall problem.
 ///
 /// Covers: RQ-UI-007
@@ -320,18 +354,8 @@ impl Api {
         );
         FirewallDto {
             suspected,
-            command: concat!(
-                "netsh advfirewall firewall add rule name=\"Rincon\" ",
-                "dir=in action=allow program=\"%LOCALAPPDATA%\\Programs\\Rincon\\rincon.exe\" ",
-                "profile=private"
-            )
-            .to_owned(),
-            explanation: concat!(
-                "Your speaker fetches audio from this computer, so Windows Firewall has to ",
-                "allow incoming connections to Rincon on private networks. Run this in an ",
-                "administrator terminal."
-            )
-            .to_owned(),
+            command: FIREWALL_COMMANDS.to_owned(),
+            explanation: FIREWALL_EXPLANATION.to_owned(),
         }
     }
 
@@ -492,9 +516,22 @@ mod tests {
         let api = api(FakeDiscovery::empty());
         let advice = api.firewall_status();
 
-        // It hands over the command text...
-        assert!(advice.command.contains("netsh advfirewall"));
-        assert!(advice.command.contains("profile=private"), "never open on a public network");
+        // It hands over the command text, scoped to private networks only.
+        assert!(advice.command.contains("New-NetFirewallRule"));
+        assert!(advice.command.contains("-Profile Private"));
+        assert!(
+            !advice.command.contains("-Profile Public"),
+            "never tell a user to open this port on an untrusted network"
+        );
+
+        // And it addresses the cause before the symptom. Windows classifies plenty of home
+        // Wi-Fi as Public; advice that assumes otherwise sends the user to add a rule for a
+        // profile their network is not in, which changes nothing and looks like a broken app.
+        assert!(
+            advice.command.contains("Set-NetConnectionProfile"),
+            "the advice must fix the network type, not just add a rule"
+        );
+        assert!(advice.explanation.to_lowercase().contains("public"));
         assert!(!advice.explanation.is_empty());
 
         // ...and there is no command that runs it. If one is ever added, this fails.

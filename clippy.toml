@@ -9,5 +9,6 @@ type-complexity-threshold = 300
 doc-valid-idents = [
     "UPnP", "SSDP", "WASAPI", "WebView", "DIDL", "RIFF", "AirPlay", "webOS",
     "Bonjour", "DHCP", "ALSA", "CoreAudio", "ScreenCaptureKit", "PowerShell",
+    "VirtualBox", "VMware", "Tailscale", "IZZI",
     "..",
 ]

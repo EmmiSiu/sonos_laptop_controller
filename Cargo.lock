@@ -1413,6 +1413,7 @@ dependencies = [
  "rincon-core",
  "rincon-discovery",
  "rincon-engine",
+ "rincon-ipc",
  "rincon-stream",
  "tokio",
  "tracing",

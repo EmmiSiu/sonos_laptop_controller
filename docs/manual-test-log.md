@@ -120,7 +120,10 @@ With the app open and no session, check Task Manager after five minutes.
 
 | Date | Check | Platform | Hardware | Result | Notes |
 | ---- | ----- | -------- | -------- | ------ | ----- |
-| — | — | — | — | — | No runs recorded yet. |
+| 2026-09-21 | HW-1 (capture half) | Windows 11 26200 | Realtek endpoint | **pass** | WASAPI loopback opened at 48 kHz / 2ch / f32le. 200 KB captured through ring → L16 → WAV → HTTP; 99,978/99,978 samples non-zero, L peak 15 / R peak 68, channels distinct. Header declared `data` = 4294967251, as SPEC-002 specifies. |
+| 2026-09-21 | HW-1 (discovery half) | Windows 11 26200 | Sonos "Bedroom", 192.168.0.223 | **pass** | Found on the first scan. Description fetched and parsed, room name correct, `reached_via` correctly chose Wi-Fi over the WSL virtual switch (after the fix below). |
+| 2026-09-21 | HW-1 (playback half) | — | — | **not run** | The speaker has never been asked to play. This is the largest remaining gap. |
+| 2026-09-21 | HW-4 | Windows 11 26200 | — | **partial** | Inbound reached the server, so the path is open — but only because the machine's home Wi-Fi is classified `Public` *and* the rule was added for `Public`. That is the wrong configuration to ship advice for; see the two findings below. |
 
 <!--
 Add rows like:

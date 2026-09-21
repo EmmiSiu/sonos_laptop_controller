@@ -37,7 +37,10 @@ pub mod ssdp;
 
 pub use description::{DescriptionError, DeviceDescription};
 pub use fetch::FetchError;
-pub use scan::{ScanConfig, ScanError, ScanOutcome, UnresolvedDevice};
+pub use scan::{
+    InterfaceKind, ProbeInterface, ScanConfig, ScanError, ScanOutcome, UnresolvedDevice,
+    preferred_lan_interface,
+};
 pub use ssdp::{SsdpError, SsdpResponse};
 
 /// Anything that can produce a list of devices.

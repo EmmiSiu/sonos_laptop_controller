@@ -28,6 +28,7 @@ rincon-audio     = { workspace = true }
 rincon-control   = { workspace = true }
 rincon-discovery = { workspace = true }
 rincon-engine    = { workspace = true }
+rincon-ipc       = { workspace = true }
 rincon-stream    = { workspace = true }
 anyhow           = { workspace = true }
 clap             = { workspace = true }

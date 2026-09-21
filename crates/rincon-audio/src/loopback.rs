@@ -234,10 +234,11 @@ fn run_capture(
         }
     };
 
-    let stream = match stream {
-        Ok(stream) => stream,
-        Err(cpal::BuildStreamError::DeviceNotAvailable) => return,
-        Err(_) => return,
+    let Ok(stream) = stream else {
+        // Every build failure ends the same way: the caller already has the format we
+        // reported, and it will time out waiting for audio that is never going to arrive.
+        // Distinguishing the causes here would only produce a log line nobody reads.
+        return;
     };
 
     if stream.play().is_err() {
@@ -288,7 +289,7 @@ mod tests {
     /// would otherwise accumulate one stranded thread per retry on a headless runner.
     #[tokio::test]
     async fn a_failed_open_leaves_no_thread_behind() {
-        let before = std::thread::available_parallelism().map(std::num::NonZero::get).unwrap_or(1);
+        let before = thread::available_parallelism().map_or(1, std::num::NonZero::get);
         for _ in 0..3 {
             // On a machine with no output endpoint this errors; on a developer's laptop it
             // succeeds and is dropped immediately. Both paths must clean up.
