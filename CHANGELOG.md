@@ -18,6 +18,14 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   necessarily runs for several seconds before anything fetches the stream, and the ring
   correctly discards that audio. It now has its own layer (`no-consumer`), is still counted and
   still appears in the diagnostics bundle, and is excluded from the health model.
+- **A reconnect no longer looks like dropped audio.** A Sonos routinely opens the stream, drops
+  it, and reopens it a second later — SPEC-002 requires the session to survive that. The first
+  attempt at the fix above used a latch ("has anything ever read?"), which meant the ~1 s gap of
+  a normal startup reconnect was charged to the ring: measured on hardware as 45,120 frames and
+  an amber "Dropping audio" on a session that was working. The flag now follows the stream
+  server's existing lease boundary, so it clears on disconnect and is set again on reconnect.
+- **Reconnects are counted.** Nothing ever called `record_reconnect`, so the interface reported
+  "Reconnects 0" for a session that had visibly reconnected twice.
 - **The interface no longer computes its own, different, drop total.** It summed
   `dropped_ring + dropped_socket`, silently omitting capture and device loss, which would have
   disagreed with the health indicator beside it. The number now comes from one place.

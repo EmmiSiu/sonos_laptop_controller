@@ -127,13 +127,21 @@ struct Shared {
     filled: ArrayQueue<Block>,
     free: ArrayQueue<Block>,
     device_lost: AtomicBool,
-    /// Set the first time the consumer reads.
+    /// Whether something is draining the ring **right now**.
     ///
-    /// Before that, the ring is filling with audio nobody has asked for yet: capture must
-    /// start before the server can bind, and the speaker will not connect until it has been
-    /// handed a URL. Discarding that audio is expected, so it is attributed to
-    /// [`DropLayer::NoConsumer`] rather than counted against the session's quality.
-    consumer_started: AtomicBool,
+    /// Set when the consumer reads, cleared when it detaches. Deliberately not a latch: the
+    /// ring fills with unwanted audio twice over, and only one of those is obvious.
+    ///
+    /// The first is before anything connects — capture must start before the server can bind,
+    /// and the speaker will not connect until it has been handed a URL. The second is
+    /// **every reconnect**: a Sonos routinely opens the stream, drops it, and opens it again
+    /// a second later, and SPEC-002 requires the session to survive that. A latch set on the
+    /// first read would blame the ring for the second gap, which is how a normal startup
+    /// reconnect turned the health indicator amber for a session that was fine.
+    ///
+    /// Either way the loss is counted, but as [`DropLayer::NoConsumer`], which the health
+    /// model excludes.
+    consumer_attached: AtomicBool,
     counters: Arc<SessionCounters>,
     format: AudioFormat,
 }
@@ -183,7 +191,7 @@ pub fn channel(
         filled,
         free,
         device_lost: AtomicBool::new(false),
-        consumer_started: AtomicBool::new(false),
+        consumer_attached: AtomicBool::new(false),
         counters,
         format,
     });
@@ -238,7 +246,7 @@ impl FrameSender {
         }
 
         if dropped_frames > 0 {
-            let layer = if self.shared.consumer_started.load(Ordering::Acquire) {
+            let layer = if self.shared.consumer_attached.load(Ordering::Acquire) {
                 DropLayer::Ring
             } else {
                 DropLayer::NoConsumer
@@ -299,8 +307,8 @@ impl FrameReceiver {
             return Ok(0);
         }
         // From here on, overrun means the consumer fell behind — a real quality problem —
-        // rather than "nothing was listening yet".
-        self.shared.consumer_started.store(true, Ordering::Release);
+        // rather than "nothing is listening". `detach` puts it back.
+        self.shared.consumer_attached.store(true, Ordering::Release);
 
         // Only ever hand back whole frames, however small the caller's buffer is.
         let writable = out.len() - (out.len() % channels);
@@ -362,6 +370,20 @@ impl FrameReceiver {
     #[must_use]
     pub fn device_lost(&self) -> bool {
         self.shared.device_lost.load(Ordering::Acquire)
+    }
+
+    /// Declares that nothing is draining this receiver for the time being.
+    ///
+    /// Call it when a consumer lets go — the stream server does, when the speaker's connection
+    /// ends and the receiver goes back in the pool. Audio discarded from here until the next
+    /// [`read`](Self::read) is attributed to [`DropLayer::NoConsumer`] rather than counted
+    /// against the session's quality, because there is no consumer to have fallen behind.
+    ///
+    /// Idempotent, and cheap enough to call on every disconnect.
+    ///
+    /// Covers: RQ-OBS-001
+    pub fn detach(&self) {
+        self.shared.consumer_attached.store(false, Ordering::Release);
     }
 
     fn next_block(&self) -> Option<(Block, usize)> {
@@ -575,6 +597,49 @@ mod tests {
             "overrun after the consumer started must count against quality"
         );
         assert!(counters.snapshot().quality_drops() > 0);
+    }
+
+    /// Covers: RQ-OBS-001
+    #[test]
+    fn a_reconnect_gap_is_not_blamed_on_the_consumer_either() {
+        // Measured on real hardware, and the reason `consumer_attached` is not a latch. A
+        // Sonos opened the stream, dropped it, and reopened it one second later -- its normal
+        // startup behaviour, which SPEC-002 requires the session to survive. The 45,120 frames
+        // discarded in that gap were attributed to the ring, so the health indicator read
+        // "Dropping audio" for a session that was working.
+        let counters = SessionCounters::new();
+        let (mut tx, mut rx) = channel(stereo_48k(), 1, Arc::clone(&counters));
+
+        // Connect, drain, and overrun: that loss is real and belongs to the ring.
+        let mut out = vec![0.0_f32; 16];
+        let _ = rx.read(&mut out);
+        for n in 0..12 {
+            tx.push(&vec![n as f32; FRAMES_PER_BLOCK * 2]);
+        }
+        let real_loss = counters.dropped_at(DropLayer::Ring);
+        assert!(real_loss > 0, "the setup must actually overrun while attached");
+
+        // The speaker hangs up. The stream server drops its lease, which detaches.
+        rx.detach();
+        for n in 0..12 {
+            tx.push(&vec![n as f32; FRAMES_PER_BLOCK * 2]);
+        }
+        assert_eq!(
+            counters.dropped_at(DropLayer::Ring),
+            real_loss,
+            "a gap with no consumer must not be charged to the ring"
+        );
+        assert!(counters.dropped_at(DropLayer::NoConsumer) > 0, "but it must still be counted");
+
+        // It reconnects, and the ring is answerable again.
+        let _ = rx.read(&mut out);
+        for n in 0..12 {
+            tx.push(&vec![n as f32; FRAMES_PER_BLOCK * 2]);
+        }
+        assert!(
+            counters.dropped_at(DropLayer::Ring) > real_loss,
+            "overrun after reconnecting counts against quality again"
+        );
     }
 
     #[test]

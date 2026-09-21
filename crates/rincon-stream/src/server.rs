@@ -100,6 +100,11 @@ struct AppState {
     active: AtomicUsize,
     counters: Arc<SessionCounters>,
     peer_ever_connected: AtomicBool,
+    /// How many audio streams have been served, including the one in flight.
+    ///
+    /// Distinct from `peer_ever_connected`, which a `HEAD` also sets: a probe is a connection
+    /// for firewall purposes and not a stream. The second stream onwards is a reconnect.
+    streams_served: AtomicUsize,
 }
 
 /// A running server.
@@ -204,6 +209,7 @@ pub async fn bind(
         active: AtomicUsize::new(0),
         counters,
         peer_ever_connected: AtomicBool::new(false),
+        streams_served: AtomicUsize::new(0),
     });
 
     // Exactly one route. Everything else -- `/`, `/..`, `/admin`, a traversal attempt -- hits
@@ -253,6 +259,11 @@ struct SourceLease {
 impl Drop for SourceLease {
     fn drop(&mut self) {
         if let Some(receiver) = self.receiver.take() {
+            // Tell the ring nobody is draining it any more, *before* it goes back in the pool.
+            // A Sonos routinely drops the stream and reopens it a second later, and without
+            // this the ring keeps blaming itself for a gap it did not cause — which showed up
+            // on real hardware as "Dropping audio" for a session that had simply reconnected.
+            receiver.detach();
             let mut slot = self.state.source.lock().unwrap_or_else(PoisonError::into_inner);
             *slot = Some(receiver);
         }
@@ -305,6 +316,15 @@ async fn stream(
         debug!("audio source is still leased to a previous connection");
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
+
+    // A second stream on a session that already had one is a reconnect. Here is the only
+    // place that can tell: the engine never sees the socket, and the ring cannot distinguish a
+    // reconnect from a first connection. Until this existed nothing called `record_reconnect`
+    // at all, so the interface reported "Reconnects 0" for a session that had visibly
+    // reconnected -- worse than not showing the number.
+    if state.streams_served.fetch_add(1, Ordering::AcqRel) > 0 {
+        state.counters.record_reconnect();
+    }
 
     info!(peer = %redact(peer.ip()), "serving audio");
     let framing = state.config.framing;

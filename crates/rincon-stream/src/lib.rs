@@ -295,6 +295,17 @@ mod tests {
         let response = reconnected.expect("the server never accepted a reconnect");
         assert_eq!(response.status(), 200);
         assert_eq!(handle.active_connections(), 1);
+
+        // Surviving the reconnect is not enough: it has to be *counted*. Nothing called
+        // `record_reconnect` until this assertion existed, so the interface showed
+        // "Reconnects 0" for a session that had visibly reconnected -- and a Sonos reconnects
+        // routinely, including once during its own startup.
+        assert_eq!(
+            handle.counters().reconnects(),
+            1,
+            "a reconnect the server served must reach the counters"
+        );
+
         drop(response);
         handle.shutdown().await;
     }
