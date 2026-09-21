@@ -67,18 +67,26 @@ constructed anywhere in the program.
 | `RQ-CTL-005` | The `SOAPACTION` header MUST be exactly `"<serviceType>#<action>"`, quoted. | `unit` | `crates/rincon-control/src/soap.rs:149`<br>`crates/rincon-control/src/soap.rs:282`<br>`crates/rincon-testkit/src/mock_sonos.rs:298` |
 | `RQ-CTL-006` | A SOAP `Fault` response MUST be parsed into a typed `ControlError::Upnp { code, description }`, never treated as success. | `unit` | `crates/rincon-control/src/soap.rs:165`<br>`crates/rincon-control/src/soap.rs:334`<br>`crates/rincon-testkit/src/mock_sonos.rs:334` |
 | `RQ-CTL-007` | UPnP error `701` (transition not available) and `714` (illegal MIME) MUST map to distinct, actionable error variants. | `unit` | `crates/rincon-control/src/error.rs:81`<br>`crates/rincon-control/src/error.rs:174`<br>`crates/rincon-testkit/src/mock_sonos.rs:334` |
-| `RQ-CTL-008` | `coordinator_of` MUST return the coordinator when the target is a grouped member, and the target itself when standalone. | `unit` | `crates/rincon-control/src/lib.rs:445`<br>`crates/rincon-control/src/topology.rs:55`<br>`crates/rincon-control/src/topology.rs:105`<br>`crates/rincon-control/src/topology.rs:196`<br>`crates/rincon-testkit/src/mock_sonos.rs:348` |
-| `RQ-CTL-009` | Control requests MUST be sent only to private addresses (shares the SPEC-003 guard). | `unit` | `crates/rincon-control/src/lib.rs:469`<br>`crates/rincon-core/src/net.rs:187`<br>`crates/rincon-core/src/net.rs:325` |
-| `RQ-CTL-010` | Every request MUST carry a timeout of at most 5 s and MUST NOT retry non-idempotent actions automatically. | `integration` | `crates/rincon-control/src/lib.rs:394` |
-| `RQ-CTL-011` | Response bodies MUST be capped at 1 MiB. | `integration` | `crates/rincon-control/src/lib.rs:424` |
+| `RQ-CTL-008` | `coordinator_of` MUST return the coordinator when the target is a grouped member, and the target itself when standalone. | `unit` | `crates/rincon-control/src/lib.rs:522`<br>`crates/rincon-control/src/topology.rs:55`<br>`crates/rincon-control/src/topology.rs:105`<br>`crates/rincon-control/src/topology.rs:196`<br>`crates/rincon-testkit/src/mock_sonos.rs:348` |
+| `RQ-CTL-009` | Control requests MUST be sent only to private addresses (shares the SPEC-003 guard). | `unit` | `crates/rincon-control/src/lib.rs:546`<br>`crates/rincon-core/src/net.rs:187`<br>`crates/rincon-core/src/net.rs:325` |
+| `RQ-CTL-010` | Every request MUST carry an explicit timeout and MUST NOT retry a non-idempotent action automatically. `SetAVTransportURI` MUST be allowed at least 15 s; every other action MUST complete within 5 s. | `integration` | `crates/rincon-control/src/lib.rs:428`<br>`crates/rincon-control/src/lib.rs:458` |
+| `RQ-CTL-011` | Response bodies MUST be capped at 1 MiB. | `integration` | `crates/rincon-control/src/lib.rs:501` |
 | `RQ-CTL-012` | `Volume` MUST be unconstructible outside `0..=100`. | `property` | `crates/rincon-control/src/volume.rs:35`<br>`crates/rincon-control/src/volume.rs:110` |
 | `RQ-CTL-013` | Zone-group topology parsing MUST reject a DOCTYPE, as description parsing does. | `unit` | `crates/rincon-control/src/soap.rs:165`<br>`crates/rincon-control/src/soap.rs:386`<br>`crates/rincon-control/src/topology.rs:105`<br>`crates/rincon-control/src/topology.rs:236`<br>`crates/rincon-core/src/xml.rs:46`<br>`crates/rincon-core/src/xml.rs:132` |
+
+> **`SetAVTransportURI` is not a round trip.** Before it replies, the speaker fetches the URL
+> it was just given, to check it can decode what is there. Its duration therefore includes a
+> whole HTTP exchange back to us over Wi-Fi. Measured on a Sonos One: **5.02 s** — which, under
+> the original "at most 5 s for every request" wording, timed out twenty milliseconds before
+> the speaker connected. The session was torn down while the speaker was busy succeeding, and
+> it presented as "the speaker stopped responding". The budget is now per action.
 
 ## 6. Failure modes
 
 | Condition | Detection | Response | User-visible result |
 | --------- | --------- | -------- | ------------------- |
 | Speaker busy with another source | UPnP `701` | Surface as recoverable | "Kitchen is playing something else. Take over?" |
+| Speaker slow to fetch the stream during `SetAVTransportURI` | Takes seconds, not milliseconds | Wait up to `URI_HANDOFF_TIMEOUT` | transparent; the stepper sits on step 4 |
 | Speaker rejects the stream MIME | UPnP `714` | Try the alternate framing once | transparent, then "This speaker rejected the audio format." |
 | Target is a grouped member | topology query | Retarget the coordinator automatically | transparent |
 | Device offline mid-session | connect error / timeout | `Unreachable`; engine tears the session down | "Lost connection to Kitchen." |

@@ -86,7 +86,7 @@ Stated so that the boundary is a decision, not an oversight:
 | -- | ----------- | ------------ | ---------- |
 | `RQ-SEC-001` | No outbound connection MAY be made to a non-private IP address anywhere in the audio or control path. | `unit` | `crates/rincon-core/src/net.rs:149`<br>`crates/rincon-core/src/net.rs:187`<br>`crates/rincon-core/src/net.rs:233`<br>`crates/rincon-core/src/net.rs:245` |
 | `RQ-SEC-002` | All XML parsing MUST reject DOCTYPE and entity declarations. | `unit` | `crates/rincon-core/src/xml.rs:46`<br>`crates/rincon-core/src/xml.rs:91`<br>`crates/rincon-core/src/xml.rs:132`<br>`crates/rincon-core/src/xml.rs:178` |
-| `RQ-SEC-003` | Every network read MUST have an explicit byte cap and an explicit timeout. | `unit` | `crates/rincon-core/src/limits.rs:101`<br>`crates/rincon-discovery/src/fetch.rs:76`<br>`crates/rincon-discovery/src/fetch.rs:240` |
+| `RQ-SEC-003` | Every network read MUST have an explicit byte cap and an explicit timeout. | `unit` | `crates/rincon-core/src/limits.rs:119`<br>`crates/rincon-discovery/src/fetch.rs:76`<br>`crates/rincon-discovery/src/fetch.rs:240` |
 | `RQ-SEC-004` | No parser in the workspace MAY panic on adversarial input. | `fuzz` | `.github/workflows/fuzz.yml:25` |
 | `RQ-SEC-005` | Secrets (the stream token) MUST be compared in constant time and MUST NOT appear in logs. | `unit` | `crates/rincon-core/src/stream_url.rs:82`<br>`crates/rincon-core/src/stream_url.rs:133`<br>`crates/rincon-core/src/stream_url.rs:163`<br>`crates/rincon-stream/src/token.rs:75`<br>`crates/rincon-stream/src/token.rs:202` |
 | `RQ-SEC-006` | The audio stream MUST be reachable only by an allowlisted peer IP. | `integration` | `crates/rincon-stream/src/lib.rs:83` |

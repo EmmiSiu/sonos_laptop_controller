@@ -77,6 +77,13 @@ enum Command {
         /// Set the volume before starting.
         #[arg(long)]
         volume: Option<u8>,
+
+        /// Stop cleanly after this many seconds instead of waiting for Ctrl-C.
+        ///
+        /// Exists so the session can be driven from a script. Killing the process instead
+        /// skips teardown, which leaves the speaker fetching a URL that no longer answers.
+        #[arg(long)]
+        seconds: Option<u64>,
     },
 }
 
@@ -91,7 +98,7 @@ async fn main() -> Result<()> {
         Command::Discover => discover(&cli).await,
         Command::Doctor => doctor(&cli).await,
         Command::Stream { interface } => stream(&cli, *interface).await,
-        Command::Play { room, volume } => play(&cli, room, *volume).await,
+        Command::Play { room, volume, seconds } => play(&cli, room, *volume, *seconds).await,
     }
 }
 
@@ -239,7 +246,7 @@ async fn stream(cli: &Cli, interface: Option<IpAddr>) -> Result<()> {
     Ok(())
 }
 
-async fn play(cli: &Cli, room: &str, volume: Option<u8>) -> Result<()> {
+async fn play(cli: &Cli, room: &str, volume: Option<u8>, seconds: Option<u64>) -> Result<()> {
     let outcome = discovery_for(cli).discover().await.context("discovery could not run")?;
     let target = find_room(&outcome.devices, room)?;
 
@@ -286,10 +293,39 @@ async fn play(cli: &Cli, room: &str, volume: Option<u8>) -> Result<()> {
         bail!("the session did not start");
     }
 
-    tokio::signal::ctrl_c().await.context("cannot listen for Ctrl-C")?;
+    match seconds {
+        Some(limit) => {
+            println!("Stopping automatically in {limit} s.");
+            // Either the clock or the user, whichever comes first: a bounded run should
+            // still be interruptible.
+            tokio::select! {
+                () = tokio::time::sleep(Duration::from_secs(limit)) => {}
+                result = tokio::signal::ctrl_c() => {
+                    result.context("cannot listen for Ctrl-C")?;
+                }
+            }
+        }
+        None => tokio::signal::ctrl_c().await.context("cannot listen for Ctrl-C")?,
+    }
+
+    // Snapshot before tearing down. Teardown releases the session's counters along with
+    // everything else it owns, so reading them afterwards silently reports nothing -- which
+    // is exactly what the first real run of this command did.
+    let summary = engine.counters().map(|counters| counters.snapshot());
+
     println!("\nStopping...");
     engine.dispatch(Event::Disconnect).await;
     engine.dispatch(Event::TeardownComplete).await;
+
+    if let Some(snapshot) = summary {
+        println!(
+            "captured {} frames, served {}, dropped {}, underruns {}",
+            snapshot.frames_captured,
+            snapshot.frames_served,
+            snapshot.dropped_total(),
+            snapshot.underruns
+        );
+    }
     Ok(())
 }
 

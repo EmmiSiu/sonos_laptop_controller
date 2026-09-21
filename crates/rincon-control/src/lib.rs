@@ -24,6 +24,7 @@
 
 use std::fmt;
 use std::net::IpAddr;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use rincon_core::device::Device;
@@ -112,6 +113,8 @@ impl SoapControl {
         let client = reqwest::Client::builder()
             // A control response must never be a redirect we chase somewhere else.
             .redirect(reqwest::redirect::Policy::none())
+            // The default budget. Individual calls override it; connecting is always quick
+            // on a LAN, so the connect timeout stays short regardless of the action.
             .timeout(limits::CONTROL_TIMEOUT)
             .connect_timeout(limits::CONTROL_TIMEOUT)
             .user_agent(concat!("Rincon/", env!("CARGO_PKG_VERSION")))
@@ -132,6 +135,10 @@ impl SoapControl {
     }
 
     /// Performs one SOAP call and returns its output arguments.
+    ///
+    /// `budget` is per action rather than per client, because `SetAVTransportURI` is not a
+    /// round trip: the speaker fetches the URL before replying. See
+    /// [`limits::URI_HANDOFF_TIMEOUT`].
     #[instrument(skip(self, args), fields(device = %target.room, %action))]
     async fn call(
         &self,
@@ -139,6 +146,7 @@ impl SoapControl {
         service: Service,
         action: &str,
         args: &[(&str, &str)],
+        budget: Duration,
     ) -> Result<std::collections::BTreeMap<String, String>, ControlError> {
         let endpoint = Self::endpoint(target, service)?;
         let body = soap::envelope(service, action, args);
@@ -148,6 +156,7 @@ impl SoapControl {
             .post(endpoint)
             .header("Content-Type", "text/xml; charset=\"utf-8\"")
             .header("SOAPACTION", soap::action_header(service, action))
+            .timeout(budget)
             .body(body)
             .send()
             .await
@@ -209,19 +218,35 @@ impl TransportControl for SoapControl {
                 ("CurrentURI", uri.as_str()),
                 ("CurrentURIMetaData", &meta.to_didl()),
             ],
+            // The long budget. The speaker fetches this URL before answering.
+            limits::URI_HANDOFF_TIMEOUT,
         )
         .await
         .map(drop)
     }
 
     async fn play(&self, target: &Device) -> Result<(), ControlError> {
-        self.call(target, Service::AvTransport, "Play", &[("InstanceID", "0"), ("Speed", "1")])
-            .await
-            .map(drop)
+        self.call(
+            target,
+            Service::AvTransport,
+            "Play",
+            &[("InstanceID", "0"), ("Speed", "1")],
+            limits::CONTROL_TIMEOUT,
+        )
+        .await
+        .map(drop)
     }
 
     async fn stop(&self, target: &Device) -> Result<(), ControlError> {
-        self.call(target, Service::AvTransport, "Stop", &[("InstanceID", "0")]).await.map(drop)
+        self.call(
+            target,
+            Service::AvTransport,
+            "Stop",
+            &[("InstanceID", "0")],
+            limits::CONTROL_TIMEOUT,
+        )
+        .await
+        .map(drop)
     }
 
     async fn volume(&self, target: &Device) -> Result<Volume, ControlError> {
@@ -231,6 +256,7 @@ impl TransportControl for SoapControl {
                 Service::RenderingControl,
                 "GetVolume",
                 &[("InstanceID", "0"), ("Channel", "Master")],
+                limits::CONTROL_TIMEOUT,
             )
             .await?;
 
@@ -247,14 +273,22 @@ impl TransportControl for SoapControl {
             Service::RenderingControl,
             "SetVolume",
             &[("InstanceID", "0"), ("Channel", "Master"), ("DesiredVolume", &level.to_string())],
+            limits::CONTROL_TIMEOUT,
         )
         .await
         .map(drop)
     }
 
     async fn coordinator_of(&self, target: &Device) -> Result<String, ControlError> {
-        let values =
-            self.call(target, Service::ZoneGroupTopology, "GetZoneGroupState", &[]).await?;
+        let values = self
+            .call(
+                target,
+                Service::ZoneGroupTopology,
+                "GetZoneGroupState",
+                &[],
+                limits::CONTROL_TIMEOUT,
+            )
+            .await?;
 
         let Some(state) = values.get("ZoneGroupState") else {
             // A device that does not implement topology is standalone as far as we care.
@@ -419,6 +453,49 @@ mod tests {
             "gave up only after {elapsed:?}, over the {:?} budget",
             limits::CONTROL_TIMEOUT
         );
+    }
+
+    /// Covers: RQ-CTL-010
+    #[tokio::test]
+    async fn rq_ctl_010_uri_handoff_waits_for_the_speakers_own_fetch() {
+        // The failure this pins down was measured on a Sonos One: `SetAVTransportURI` took
+        // 5.02 s because the speaker fetches the URL before replying, and the shared 5 s
+        // budget gave up 20 ms too early. The session was torn down while the speaker was
+        // busy succeeding, and the user was told it had "stopped responding".
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/MediaRenderer/AVTransport/Control"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(ok_body("SetAVTransportURI", ""))
+                    // Comfortably past the ordinary budget, well inside the handoff one.
+                    .set_delay(limits::CONTROL_TIMEOUT + Duration::from_secs(2)),
+            )
+            .mount(&server)
+            .await;
+
+        let device = device_at(&server.uri());
+        let url = StreamUrl::new(
+            "192.168.1.20".parse().unwrap(),
+            41_234,
+            "0123456789abcdef0123456789abcdef",
+        );
+
+        let started = Instant::now();
+        let result =
+            SoapControl::new().unwrap().set_stream_uri(&device, &url, &TrackMeta::default()).await;
+        let elapsed = started.elapsed();
+
+        assert!(result.is_ok(), "a slow-but-succeeding handoff must not be abandoned: {result:?}");
+        assert!(
+            elapsed > limits::CONTROL_TIMEOUT,
+            "the test did not actually exceed the short budget"
+        );
+
+        // And the generous budget applies to this command only: everything else is a genuine
+        // round trip and must not be allowed to hang the interface for twenty seconds.
+        assert!(limits::URI_HANDOFF_TIMEOUT >= Duration::from_secs(15));
+        assert!(limits::CONTROL_TIMEOUT <= Duration::from_secs(5));
     }
 
     /// Covers: RQ-CTL-011

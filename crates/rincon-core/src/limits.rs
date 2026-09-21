@@ -31,6 +31,24 @@ pub const DESCRIPTION_TIMEOUT: Duration = Duration::from_secs(2);
 /// Timeout for a single SOAP control request.
 pub const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Timeout for `SetAVTransportURI` specifically.
+///
+/// # Why this one is different
+///
+/// Every other control command is a round trip: the speaker parses a request, changes some
+/// state, and answers. `SetAVTransportURI` is not. Before it replies, the speaker **fetches
+/// the URL we just gave it** to check that it can decode what is there — so the command's
+/// duration includes a whole HTTP exchange back to us, over Wi-Fi, plus whatever the speaker
+/// does with the first bytes.
+///
+/// Measured on a Sonos One: 5.02 s. With the ordinary 5 s budget the command timed out
+/// *twenty milliseconds* before the speaker connected, and the session was torn down while
+/// the speaker was busy succeeding.
+///
+/// 20 s is generous on purpose. The failure this guards against is a false negative on a slow
+/// network, and the cost of waiting is bounded by the interface showing which step it is on.
+pub const URI_HANDOFF_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// How long an SSDP scan listens for replies before giving up.
 pub const DISCOVERY_WINDOW: Duration = Duration::from_secs(2);
 

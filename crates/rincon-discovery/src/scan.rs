@@ -256,7 +256,15 @@ pub async fn scan(config: ScanConfig) -> Result<ScanOutcome, ScanError> {
     Ok(outcome)
 }
 
-/// Sends one probe from `local` and collects replies until the window closes.
+/// Probes sent per interface, per scan.
+///
+/// SSDP is UDP with no delivery guarantee, and a lost reply is indistinguishable from an
+/// absent speaker. A single M-SEARCH therefore produces an occasional false "no speakers
+/// found" — observed on a real network, on a speaker that answered every other attempt. The
+/// UPnP specification anticipates this and tells control points to retransmit.
+const PROBES_PER_INTERFACE: u32 = 3;
+
+/// Sends probes from `local` and collects replies until the window closes.
 async fn probe_one(local: Ipv4Addr, config: ScanConfig) -> std::io::Result<Vec<SsdpResponse>> {
     let socket = bind_probe_socket(local)?;
     let target: SocketAddr = format!("{}:{}", ssdp::MULTICAST_ADDR, ssdp::MULTICAST_PORT)
@@ -268,14 +276,30 @@ async fn probe_one(local: Ipv4Addr, config: ScanConfig) -> std::io::Result<Vec<S
 
     let mut found = Vec::new();
     let mut buffer = vec![0_u8; limits::MAX_SSDP_DATAGRAM];
-    let deadline = tokio::time::Instant::now() + config.window;
+    let started = tokio::time::Instant::now();
+    let deadline = started + config.window;
+
+    // Spread the retransmissions across the first part of the window, so the last one still
+    // has time to be answered before the deadline.
+    let mut next_probe = 1;
+    let probe_gap = config.window / (PROBES_PER_INTERFACE + 1);
 
     loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() {
             break;
         }
-        match tokio::time::timeout(remaining, socket.recv_from(&mut buffer)).await {
+
+        // Retransmit on schedule. A duplicate reply costs nothing: responses are
+        // deduplicated by UDN.
+        if next_probe < PROBES_PER_INTERFACE && started.elapsed() >= probe_gap * next_probe {
+            let _ = socket.send_to(&request, target).await;
+            next_probe += 1;
+        }
+
+        // Wake up often enough to keep the retransmission schedule even when nothing replies.
+        let slice = remaining.min(probe_gap.max(Duration::from_millis(50)));
+        match tokio::time::timeout(slice, socket.recv_from(&mut buffer)).await {
             Ok(Ok((len, from))) => {
                 let Some(datagram) = buffer.get(..len) else { continue };
                 match ssdp::parse_response(datagram) {
@@ -293,7 +317,9 @@ async fn probe_one(local: Ipv4Addr, config: ScanConfig) -> std::io::Result<Vec<S
                 debug!(%local, %err, "recv failed");
                 break;
             }
-            Err(_elapsed) => break,
+            // A slice expiring is the normal case between replies, not the end of the scan.
+            // Only the deadline, checked at the top of the loop, ends it.
+            Err(_elapsed) => {}
         }
     }
 
@@ -495,6 +521,24 @@ mod tests {
                 .expect("the preferred address must come from the probe list");
             assert_eq!(picked.kind, InterfaceKind::Physical);
         }
+    }
+
+    /// Covers: RQ-DISC-011
+    #[test]
+    fn the_probe_schedule_fits_inside_the_scan_window() {
+        // Every retransmission must leave time for a reply. A probe sent at the deadline is
+        // a probe nobody can answer, and it would make the extra attempts pointless.
+        // One probe makes a lost reply indistinguishable from an absent speaker.
+        const _: () = assert!(PROBES_PER_INTERFACE >= 2);
+
+        let window = ScanConfig::default().window;
+        let gap = window / (PROBES_PER_INTERFACE + 1);
+        let last_probe_at = gap * (PROBES_PER_INTERFACE - 1);
+
+        assert!(
+            last_probe_at + gap <= window,
+            "the last probe at {last_probe_at:?} leaves no room to answer inside {window:?}"
+        );
     }
 
     #[test]
