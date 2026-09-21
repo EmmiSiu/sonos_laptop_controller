@@ -1,0 +1,13 @@
+# Real-time audio code must not allocate or panic on hot paths.
+avoid-breaking-exported-api = false
+# A Sonos room name or model string is user-controlled; keep parsing budgets small.
+too-many-arguments-threshold = 8
+type-complexity-threshold = 300
+
+# Domain vocabulary that `clippy::doc_markdown` would otherwise flag as un-backticked
+# identifiers. `".."` keeps clippy's own default allowlist in addition to these.
+doc-valid-idents = [
+    "UPnP", "SSDP", "WASAPI", "WebView", "DIDL", "RIFF", "AirPlay", "webOS",
+    "Bonjour", "DHCP", "ALSA", "CoreAudio", "ScreenCaptureKit", "PowerShell",
+    "..",
+]

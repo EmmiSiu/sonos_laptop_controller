@@ -1,0 +1,24 @@
+# Normalise to LF in the repo; Windows checkouts get native endings only where needed.
+* text=auto eol=lf
+
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+*.rs    text eol=lf diff=rust
+*.toml  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.ts    text eol=lf
+*.vue   text eol=lf
+
+# Binary fixtures must never be mangled.
+*.wav   binary
+*.flac  binary
+*.png   binary
+*.ico   binary
+*.icns  binary
+
+Cargo.lock merge=binary linguist-generated=true
+package-lock.json merge=binary linguist-generated=true

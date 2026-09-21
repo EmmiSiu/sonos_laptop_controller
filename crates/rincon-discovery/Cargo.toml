@@ -1,0 +1,36 @@
+[package]
+name        = "rincon-discovery"
+description = "SSDP discovery of Sonos players, with hardened parsing of every untrusted response."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+readme.workspace       = true
+keywords.workspace     = true
+categories.workspace   = true
+
+[dependencies]
+rincon-core = { workspace = true }
+async-trait = { workspace = true }
+bytes       = { workspace = true }
+futures     = { workspace = true }
+if-addrs    = { workspace = true }
+quick-xml   = { workspace = true }
+# No TLS features: Sonos local control is plain HTTP, so the whole TLS subtree stays out of
+# the binary. See `fetch::client` for the reasoning.
+reqwest     = { workspace = true, default-features = false }
+socket2     = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true, features = ["net", "time", "rt"] }
+tracing     = { workspace = true }
+url         = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tokio    = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+wiremock = { workspace = true }
+
+[lints]
+workspace = true

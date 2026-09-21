@@ -1,0 +1,7 @@
+# Pinning to `stable` keeps contributors and CI on the same release train without
+# breaking every six weeks. The MSRV that actually gates compilation is declared
+# in the workspace `Cargo.toml` (`rust-version`) and enforced by the CI msrv job.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "default"

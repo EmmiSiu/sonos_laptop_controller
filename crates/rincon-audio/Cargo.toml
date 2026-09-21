@@ -1,0 +1,36 @@
+[package]
+name        = "rincon-audio"
+description = "System audio capture and the lock-free bridge from the real-time callback to async consumers."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+readme.workspace       = true
+keywords.workspace     = true
+categories.workspace   = true
+
+[features]
+default = ["loopback"]
+# The real OS backend. Disabled in Linux CI, where only the synthetic backend is meaningful,
+# so the crate still compiles and tests without ALSA headers present.
+loopback = ["dep:cpal"]
+
+[dependencies]
+rincon-core     = { workspace = true }
+async-trait     = { workspace = true }
+crossbeam-queue = { workspace = true }
+thiserror       = { workspace = true }
+tracing         = { workspace = true }
+
+# cpal is only pulled in on platforms that have a loopback backend worth building.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+cpal = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tokio    = { workspace = true, features = ["rt", "macros", "time"] }
+
+[lints]
+workspace = true

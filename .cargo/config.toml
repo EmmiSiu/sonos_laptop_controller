@@ -1,0 +1,15 @@
+[alias]
+xtest  = "test --workspace --all-features"
+xlint  = "clippy --workspace --all-targets --all-features -- -D warnings"
+xfmt   = "fmt --all -- --check"
+xdoc   = "doc --workspace --no-deps --all-features"
+
+[build]
+# Keeps incremental rebuilds honest about the lints declared in Cargo.toml.
+rustdocflags = ["-D", "warnings"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = [
+    # Control Flow Guard: cheap exploit mitigation, no measurable audio cost.
+    "-C", "control-flow-guard=yes",
+]

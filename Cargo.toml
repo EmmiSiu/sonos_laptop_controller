@@ -1,0 +1,148 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/rincon-core",
+    "crates/rincon-audio",
+    "crates/rincon-discovery",
+    "crates/rincon-control",
+    "crates/rincon-stream",
+]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.85"
+license      = "MIT"
+authors      = ["Rincon contributors"]
+repository   = "https://github.com/EmmiSiu/rincon"
+homepage     = "https://github.com/EmmiSiu/rincon"
+readme       = "README.md"
+keywords     = ["audio", "sonos", "upnp", "streaming", "wasapi"]
+categories   = ["multimedia::audio", "network-programming"]
+
+# -----------------------------------------------------------------------------
+# Every third-party version lives here exactly once. Crates reference them with
+# `dep.workspace = true`, so a bump is a one-line, one-file change.
+# -----------------------------------------------------------------------------
+[workspace.dependencies]
+# --- internal ---
+rincon-core      = { path = "crates/rincon-core",      version = "0.1.0" }
+rincon-discovery = { path = "crates/rincon-discovery", version = "0.1.0" }
+rincon-control   = { path = "crates/rincon-control",   version = "0.1.0" }
+# `default-features = false` here keeps the platform loopback backend (and with it
+# `cpal`) out of crates that only need the synthetic one. The desktop app and the CLI
+# turn it back on explicitly.
+rincon-audio     = { path = "crates/rincon-audio",     version = "0.1.0", default-features = false }
+rincon-stream    = { path = "crates/rincon-stream",    version = "0.1.0" }
+rincon-engine    = { path = "crates/rincon-engine",    version = "0.1.0" }
+rincon-testkit   = { path = "crates/rincon-testkit",   version = "0.1.0" }
+
+# --- async runtime & networking ---
+tokio        = { version = "1", default-features = false }
+tokio-stream = "0.1"
+tokio-util   = "0.7"
+futures      = "0.3"
+async-trait  = "0.1"
+axum         = { version = "0.8", default-features = false }
+tower        = "0.5"
+tower-http   = { version = "0.6", default-features = false }
+hyper        = "1"
+reqwest      = { version = "0.12", default-features = false }
+socket2      = "0.5"
+if-addrs     = "0.13"
+url          = "2"
+
+# --- data & serialisation ---
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+quick-xml  = "0.37"
+bytes      = "1"
+
+# --- errors, logging, time ---
+thiserror          = "2"
+anyhow             = "1"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# --- audio ---
+cpal            = "0.15"
+crossbeam-queue = "0.3"
+
+# --- security ---
+getrandom = "0.2"
+subtle    = "2"
+
+# --- cli / ui ---
+clap        = { version = "4", features = ["derive", "env"] }
+tauri       = { version = "2", default-features = false }
+tauri-build = "2"
+tauri-plugin-opener = "2"
+
+# --- dev / test only ---
+criterion  = { version = "0.5", default-features = false }
+proptest   = "1"
+tempfile   = "3"
+wiremock   = "0.6"
+
+# -----------------------------------------------------------------------------
+# Lints apply to every member via `[lints] workspace = true`.
+# The bar is "clippy::pedantic clean", not "clippy clean".
+# -----------------------------------------------------------------------------
+[workspace.lints.rust]
+unsafe_code                = "deny"
+missing_docs               = "warn"
+missing_debug_implementations = "warn"
+rust_2018_idioms           = { level = "warn", priority = -1 }
+unreachable_pub            = "warn"
+unused_qualifications      = "warn"
+
+[workspace.lints.clippy]
+pedantic      = { level = "warn", priority = -1 }
+nursery       = { level = "warn", priority = -1 }
+cargo         = { level = "warn", priority = -1 }
+# Hard denials: these are the classes of bug that produce audible glitches,
+# panics in a shipped desktop app, or security holes.
+unwrap_used        = "deny"
+expect_used        = "warn"
+panic              = "deny"
+indexing_slicing   = "deny"
+float_cmp          = "deny"
+todo               = "deny"
+unimplemented      = "deny"
+dbg_macro          = "deny"
+print_stdout       = "warn"
+mem_forget         = "deny"
+# Noise we accept deliberately.
+module_name_repetitions = "allow"
+multiple_crate_versions = "allow"
+# `integer_division` is deliberately absent from the deny list above. Frame, channel, and byte
+# arithmetic is integer arithmetic; the lint fires on every correct line of it and suggests
+# floats, which would be actively wrong in an audio buffer. Precision loss is instead prevented
+# by the `AudioFormat` newtypes, whose invariants are tested in `rincon_core::audio`.
+
+# -----------------------------------------------------------------------------
+# Release profile: this ships to end users. Optimise hard, strip, and abort on
+# panic so a bug can never unwind through the WASAPI callback.
+# -----------------------------------------------------------------------------
+[profile.release]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+panic         = "abort"
+strip         = "symbols"
+debug         = false
+incremental   = false
+
+# Used by `cargo bench` and by the latency harness: release speed, real symbols.
+[profile.profiling]
+inherits = "release"
+strip    = "none"
+debug    = true
+panic    = "unwind"
+
+# Tests need unwinding (assert!/should_panic) and fast dependency builds.
+[profile.test]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

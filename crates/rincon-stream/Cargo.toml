@@ -1,0 +1,31 @@
+[package]
+name        = "rincon-stream"
+description = "The hardened HTTP server a Sonos player pulls the laptop's audio from."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+readme.workspace       = true
+keywords.workspace     = true
+categories.workspace   = true
+
+[dependencies]
+rincon-core  = { workspace = true }
+rincon-audio = { workspace = true }
+axum         = { workspace = true, default-features = false, features = ["tokio", "http1"] }
+bytes        = { workspace = true }
+getrandom    = { workspace = true }
+subtle       = { workspace = true }
+thiserror    = { workspace = true }
+tokio        = { workspace = true, features = ["net", "rt", "time", "sync", "macros"] }
+tokio-stream = { workspace = true }
+tracing      = { workspace = true }
+
+[dev-dependencies]
+reqwest  = { workspace = true, default-features = false, features = ["stream"] }
+tokio    = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
+[lints]
+workspace = true

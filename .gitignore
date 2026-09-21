@@ -1,0 +1,69 @@
+# ---- Rust -------------------------------------------------------------------
+/target/
+**/target/
+*.pdb
+*.rs.bk
+# Cargo.lock IS committed: this workspace produces binaries, not libraries.
+
+# ---- Node / frontend --------------------------------------------------------
+node_modules/
+.pnpm-store/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+.npm/
+.eslintcache
+
+# ---- Tauri ------------------------------------------------------------------
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/WixTools/
+apps/desktop/src-tauri/NSIS/
+
+# ---- Secrets & signing ------------------------------------------------------
+# Never commit these. CI reads them from repository secrets.
+*.pem
+*.key
+*.pfx
+*.p12
+.env
+.env.*
+!.env.example
+tauri-private.key*
+*.tauri-signing*
+
+# ---- Test / profiling artifacts --------------------------------------------
+/artifacts/
+*.wav
+!crates/*/tests/fixtures/*.wav
+*.flamegraph
+perf.data*
+/coverage/
+lcov.info
+tarpaulin-report.*
+fuzz/artifacts/
+fuzz/corpus/
+fuzz/target/
+
+# ---- OS ---------------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+._*
+
+# ---- Editors ----------------------------------------------------------------
+.idea/
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# ---- Local agent / scratch --------------------------------------------------
+.claude/local/
+scratch/
+*.local.md
