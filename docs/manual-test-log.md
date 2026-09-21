@@ -2,8 +2,8 @@
 
 Everything CI cannot do, and a record of who last did it on what.
 
-CI runs 274 automated checks against fakes, which covers every code path but one class of
-claim: *does this actually work on hardware, and does it feel right to a person?* Those are
+CI runs the automated suite against fakes, which covers every code path but one class of claim:
+*does this actually work on hardware, and does it feel right to a person?* Those checks are
 below. Each has an id, so a requirement can point at it, and a date, so "we tested that" has a
 shelf life.
 
@@ -120,6 +120,7 @@ With the app open and no session, check Task Manager after five minutes.
 
 | Date | Check | Platform | Hardware | Result | Notes |
 | ---- | ----- | -------- | -------- | ------ | ----- |
+| 2026-09-21 | Current desktop preflight | Windows 11 26200 | No Sonos network available | **pass** | 287 Rust tests and 11 UI tests passed; strict Clippy passed for both workspaces; release `.exe` built; root, Tauri, and npm dependency audits found no unallowlisted vulnerability. A real-network reconfirmation remains intentionally pending. |
 | 2026-09-21 | HW-1 (capture half) | Windows 11 26200 | Realtek endpoint | **pass** | WASAPI loopback opened at 48 kHz / 2ch / f32le. 200 KB captured through ring → L16 → WAV → HTTP; 99,978/99,978 samples non-zero, L peak 15 / R peak 68, channels distinct. Header declared `data` = 4294967251, as SPEC-002 specifies. |
 | 2026-09-21 | HW-1 (discovery half) | Windows 11 26200 | Sonos "Bedroom", 192.168.0.223 | **pass** | Found on the first scan. Description fetched and parsed, room name correct, `reached_via` correctly chose Wi-Fi over the WSL virtual switch (after the fix below). |
 | 2026-09-21 | **HW-1 (playback half)** | Windows 11 26200 | Sonos One "Bedroom" | **pass** | The speaker fetched the stream and **audibly played it**, confirmed by the operator. Full sequence: coordinator → capture → bind → `SetAVTransportURI` → `Play` → peer connected. Verified with both the synthetic 440 Hz tone and the real WASAPI capture. |

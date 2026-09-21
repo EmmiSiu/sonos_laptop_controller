@@ -92,11 +92,13 @@ mvt-control room:
 
 # SPEC-005: a full session against fakes, with the leak assertions.
 mvt-engine:
-    cargo test -p rincon-engine -- --nocapture rq_eng_010 rq_eng_011
+    cargo test -p rincon-engine rq_eng_010 -- --nocapture
+    cargo test -p rincon-engine rq_eng_011 -- --nocapture
 
 # SPEC-008: build a redacted diagnostics bundle.
 mvt-diagnostics:
-    cargo test -p rincon-core -- --nocapture rq_obs_006 rq_obs_007
+    cargo test -p rincon-core rq_obs_006 -- --nocapture
+    cargo test -p rincon-core rq_obs_007 -- --nocapture
 
 # SPEC-006: the interface, driven by fakes instead of the network.
 mvt-ui:
@@ -137,6 +139,7 @@ deny:
 # Known vulnerabilities in the dependency tree.
 audit:
     cargo audit --deny warnings
+    cargo audit --deny warnings --file apps/desktop/src-tauri/Cargo.lock --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 --ignore RUSTSEC-2025-0100 --ignore RUSTSEC-2024-0429
     cd apps/desktop && npm audit --audit-level=high
 
 # Fuzz one parser for a while. `just fuzz parse_ssdp 300`
