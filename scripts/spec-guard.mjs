@@ -72,7 +72,15 @@ function collectRequirements() {
   return { requirements, duplicates };
 }
 
-/** `Covers:` annotations found anywhere in the tracked sources. */
+/**
+ * `Covers:` annotations found in the tracked sources.
+ *
+ * Fenced code blocks in Markdown are skipped. Documentation illustrates the annotation
+ * convention with example snippets, and counting those as coverage would let a requirement be
+ * satisfied by a doc comment about how to satisfy requirements. Prose in Markdown still counts,
+ * because `docs/manual-test-log.md` is where checks that genuinely cannot be automated are
+ * recorded.
+ */
 function collectCoverage() {
   const coverage = new Map(); // id -> [locations]
   for (const root of SOURCE_ROOTS) {
@@ -82,7 +90,16 @@ function collectCoverage() {
       const text = readFileSync(file, "utf8");
       if (!text.includes("Covers:")) continue;
 
+      const markdown = file.endsWith(".md");
+      let inFence = false;
+
       text.split("\n").forEach((line, index) => {
+        if (markdown && /^\s*(```|~~~)/.test(line)) {
+          inFence = !inFence;
+          return;
+        }
+        if (inFence) return;
+
         const marker = line.indexOf("Covers:");
         if (marker === -1) return;
         const ids = line.slice(marker).match(RQ) ?? [];

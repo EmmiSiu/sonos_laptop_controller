@@ -62,8 +62,8 @@ orchestration.
 | `RQ-CORE-001` | Every network destination the app dials MUST be inside private address space (RFC1918, RFC3927, loopback, or ULA). Public addresses MUST be rejected before a socket is opened. | `unit` | `crates/rincon-core/src/net.rs:79`<br>`crates/rincon-core/src/net.rs:149`<br>`crates/rincon-core/src/net.rs:233` |
 | `RQ-CORE-002` | The workspace MUST build with zero warnings under `clippy::pedantic` and `clippy::nursery`. | `integration` | `.github/workflows/ci.yml:39` |
 | `RQ-CORE-003` | `rincon-core`, `rincon-discovery`, `rincon-control`, `rincon-stream`, and `rincon-engine` MUST build and pass their tests on Windows, Linux, and macOS. | `integration` | `.github/workflows/ci.yml:53` |
-| `RQ-CORE-004` | No crate MAY contain `unsafe` code outside a module carrying a written safety rationale approved in an ADR. | `unit` | `scripts/spec-guard.mjs:107` |
-| `RQ-CORE-005` | The release profile MUST set `panic = "abort"` so a bug can never unwind out of a real-time audio callback. | `unit` | `scripts/spec-guard.mjs:107` |
+| `RQ-CORE-004` | No crate MAY contain `unsafe` code outside a module carrying a written safety rationale approved in an ADR. | `unit` | `scripts/spec-guard.mjs:124` |
+| `RQ-CORE-005` | The release profile MUST set `panic = "abort"` so a bug can never unwind out of a real-time audio callback. | `unit` | `scripts/spec-guard.mjs:124` |
 | `RQ-CORE-006` | A device identifier MUST be validated on construction; an identifier that is empty or longer than 128 bytes MUST be rejected. | `unit` | `crates/rincon-core/src/device.rs:34`<br>`crates/rincon-core/src/device.rs:208` |
 
 ## 6. Quality gates
