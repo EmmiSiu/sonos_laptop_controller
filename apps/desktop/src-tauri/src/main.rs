@@ -16,8 +16,8 @@ use rincon_audio::AudioCapture;
 use rincon_core::audio::{AudioFormat, SampleEncoding};
 use rincon_core::telemetry::{self, TelemetryConfig};
 use rincon_engine::{Dependencies, Engine, EngineConfig};
-use rincon_ipc::{Api, DeviceDto, DiagnosticsDto, FirewallDto, IpcError, IpcResult, SessionDto};
-use tauri::{Emitter as _, Manager as _, State};
+use rincon_ipc::{Api, DeviceDto, DiagnosticsDto, FirewallDto, IpcResult, SessionDto};
+use tauri::{Emitter as _, State};
 
 /// The event the frontend listens on. One per state transition; the frontend never polls.
 const SESSION_EVENT: &str = "rincon://session";
@@ -114,13 +114,35 @@ fn build_engine() -> Arc<Engine> {
 
 /// The capture backend, with an env override so the interface can be developed without a
 /// speaker or a sound card.
+///
+/// The `cfg` is not decoration. `rincon_audio::loopback` only exists on platforms that have a
+/// loopback backend, so referencing it unconditionally compiles on Windows and fails on Linux
+/// — which is exactly the kind of break that only shows up when somebody finally builds the
+/// shell on another machine.
 fn capture_backend() -> Arc<dyn AudioCapture> {
     if std::env::var("RINCON_SYNTHETIC").is_ok() {
-        let format = AudioFormat::new(48_000, 2, SampleEncoding::F32Le)
-            .unwrap_or(AudioFormat::WIRE_DEFAULT);
-        return Arc::new(rincon_audio::SyntheticCapture::new(format, 1));
+        return Arc::new(synthetic());
     }
-    Arc::new(rincon_audio::loopback::LoopbackCapture::new())
+
+    #[cfg(all(feature = "loopback", any(windows, target_os = "macos")))]
+    {
+        Arc::new(rincon_audio::loopback::LoopbackCapture::new())
+    }
+    #[cfg(not(all(feature = "loopback", any(windows, target_os = "macos"))))]
+    {
+        // This build is a compile check or a development shell on a platform with no capture
+        // backend. Generated audio is the only honest option, and saying so beats failing at
+        // runtime with "no audio device" on a machine that has one.
+        tracing::warn!("no loopback backend on this platform; using generated audio");
+        Arc::new(synthetic())
+    }
+}
+
+/// The deterministic backend, for `RINCON_SYNTHETIC` and for platforms with no loopback.
+fn synthetic() -> rincon_audio::SyntheticCapture {
+    let format =
+        AudioFormat::new(48_000, 2, SampleEncoding::F32Le).unwrap_or(AudioFormat::WIRE_DEFAULT);
+    rincon_audio::SyntheticCapture::new(format, 1)
 }
 
 /// Where the rolling log lives, or `None` if the OS will not tell us.

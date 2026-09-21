@@ -21,9 +21,13 @@ default:
 # The gate
 # ---------------------------------------------------------------------------------------
 
-# Everything CI runs, in CI's order. Green here means green there.
+# Everything CI runs on every platform, in CI's order.
+#
+# The desktop shell is not in here: it is a separate workspace that needs webkit2gtk on Linux,
+# and requiring that to run the gate would make the gate something people skip. CI builds it on
+# Windows and macOS; run `just shell` if you touched it.
 verify: fmt-check lint test spec-guard frontend
-    @echo "All checks passed."
+    @echo "All checks passed. Run `just shell` too if you changed apps/desktop/src-tauri."
 
 # Reformat everything.
 fmt:
@@ -60,6 +64,15 @@ frontend:
 # Regenerate the TypeScript types from the Rust DTOs.
 bindings:
     cargo run -q -p rincon-ipc --example bindings
+
+# Lint the desktop shell. Its own workspace, so the root recipes do not reach it.
+shell:
+    cd apps/desktop/src-tauri && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings
+
+# Regenerate the app icon from `scripts/make-icon.py`, then fan it out to every format.
+icon:
+    python scripts/make-icon.py
+    cd apps/desktop && npx tauri icon src-tauri/icons/source.png
 
 # ---------------------------------------------------------------------------------------
 # Minimum Viable Tests — the demonstration each spec asks for

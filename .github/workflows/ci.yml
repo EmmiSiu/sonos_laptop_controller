@@ -167,6 +167,9 @@ jobs:
 
       - name: check the shell compiles
         # The shell is its own workspace (Tauri needs GTK on Linux, which the core workspace
-        # must not require), so it is checked here rather than by `cargo check --workspace`.
+        # must not require), so it is formatted and linted here rather than by the root
+        # `cargo fmt --all` and `cargo clippy --workspace`.
         working-directory: apps/desktop/src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings

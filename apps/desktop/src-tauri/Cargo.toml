@@ -23,17 +23,25 @@ path       = "src/lib.rs"
 name = "rincon-desktop"
 path = "src/main.rs"
 
+[features]
+# Mirrors `rincon-audio`. Without a feature this crate actually declares, the
+# `cfg(feature = "loopback")` in `main.rs` is silently always-false and the shipped app quietly
+# uses generated audio instead of the real device.
+default  = ["loopback"]
+loopback = ["rincon-audio/loopback"]
+
 [build-dependencies]
 tauri-build = "2"
 
 [dependencies]
 rincon-core      = { path = "../../../crates/rincon-core" }
-rincon-audio     = { path = "../../../crates/rincon-audio", features = ["loopback"] }
+rincon-audio     = { path = "../../../crates/rincon-audio", default-features = false }
 rincon-control   = { path = "../../../crates/rincon-control" }
 rincon-discovery = { path = "../../../crates/rincon-discovery" }
 rincon-engine    = { path = "../../../crates/rincon-engine" }
 rincon-ipc       = { path = "../../../crates/rincon-ipc" }
 serde            = { version = "1", features = ["derive"] }
+tracing          = "0.1"
 tauri            = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 
