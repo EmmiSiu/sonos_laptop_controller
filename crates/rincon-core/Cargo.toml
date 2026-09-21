@@ -12,6 +12,9 @@ keywords.workspace     = true
 categories.workspace   = true
 
 [dependencies]
+# Only for `escape::unescape` in the XML guard: a pure decoder, no I/O, which keeps this
+# crate's "no I/O anywhere" rule intact.
+quick-xml          = { workspace = true }
 serde              = { workspace = true }
 thiserror          = { workspace = true }
 tracing            = { workspace = true }

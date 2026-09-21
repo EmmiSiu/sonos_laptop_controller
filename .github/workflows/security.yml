@@ -36,7 +36,9 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
           command: check
-          arguments: --all-features
+          # No `--all-features` here: `deny.toml` sets `all-features = true` under [graph],
+          # and cargo-deny 0.20 rejects the flag on the `check` subcommand.
+          arguments: ""
 
   audit:
     # Covers: RQ-SEC-011

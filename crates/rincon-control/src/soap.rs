@@ -167,11 +167,18 @@ pub fn parse_response(body: &str) -> Result<BTreeMap<String, String>, SoapError>
     xml::reject_doctype(body)?;
 
     let mut reader = Reader::from_str(body);
-    reader.config_mut().trim_text(true);
+    // Deliberately *not* `trim_text(true)`. An entity reference splits a value across several
+    // Text events, and per-fragment trimming would eat the interior spaces: `Kitchen &amp;
+    // Dining` would arrive as `Kitchen&Dining`. The accumulated value is trimmed once, when
+    // the element closes.
 
     let mut values: BTreeMap<String, String> = BTreeMap::new();
     let mut current: Option<String> = None;
     let mut saw_fault = false;
+    // Accumulated rather than taken from the first fragment: an entity reference arrives as
+    // its own event, so a `ZoneGroupState` full of escaped markup would otherwise be
+    // truncated at the first `&lt;` -- which presents as grouping silently not working.
+    let mut buffer = String::new();
 
     loop {
         match reader.read_event() {
@@ -181,15 +188,33 @@ pub fn parse_response(body: &str) -> Result<BTreeMap<String, String>, SoapError>
                     saw_fault = true;
                 }
                 current = Some(name);
+                buffer.clear();
             }
-            Ok(Event::End(_)) => current = None,
+            Ok(Event::End(_)) => {
+                if let Some(name) = current.take() {
+                    let value = buffer.trim().to_owned();
+                    // `or_insert` rather than `insert`: a SOAP body repeats element names
+                    // across nested structures, and the outermost occurrence is the one the
+                    // caller asked for.
+                    values.entry(name).or_insert(value);
+                }
+                buffer.clear();
+            }
             Ok(Event::Text(text)) => {
-                let Some(name) = current.clone() else { continue };
-                let value = text
-                    .unescape()
-                    .map_err(|source| SoapError::Malformed(source.to_string()))?
-                    .into_owned();
-                values.entry(name).or_insert(value);
+                let decoded = text
+                    .xml10_content()
+                    .map_err(|source| SoapError::Malformed(source.to_string()))?;
+                buffer.push_str(&decoded);
+            }
+            Ok(Event::GeneralRef(reference)) => {
+                // The event carries the reference's *name*. A `ZoneGroupState` is a whole XML
+                // document escaped into a text node, so dropping these would leave grouping
+                // permanently broken with no error anywhere.
+                if let Ok(name) = reference.decode() {
+                    if let Some(resolved) = xml::resolve_reference(&name) {
+                        buffer.push_str(&resolved);
+                    }
+                }
             }
             Ok(Event::Eof) => break,
             Err(source) => return Err(SoapError::Malformed(source.to_string())),

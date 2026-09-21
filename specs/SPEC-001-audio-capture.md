@@ -68,17 +68,17 @@ pub struct CaptureStats {
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-AUD-001` | The producer path MUST NOT allocate, lock, or perform I/O once capture has started. | `unit` | `crates/rincon-audio/src/ring.rs:195`<br>`crates/rincon-audio/src/ring.rs:387` |
-| `RQ-AUD-002` | The ring MUST preserve frame alignment: a partial frame MUST never be visible to the consumer. | `property` | `crates/rincon-audio/src/ring.rs:195`<br>`crates/rincon-audio/src/ring.rs:282`<br>`crates/rincon-audio/src/ring.rs:419` |
-| `RQ-AUD-003` | On overrun the ring MUST discard the **oldest** whole frames and increment `frames_dropped` by exactly the number discarded. | `property` | `crates/rincon-audio/src/ring.rs:195`<br>`crates/rincon-audio/src/ring.rs:439` |
-| `RQ-AUD-004` | `f32` samples outside `[-1.0, 1.0]` MUST be clamped, never wrapped, when converted to `i16`. | `property` | `crates/rincon-audio/src/convert.rs:25`<br>`crates/rincon-audio/src/convert.rs:94` |
-| `RQ-AUD-005` | Conversion endpoints MUST be exact: `+1.0 → 32767`, `-1.0 → -32768`, `0.0 → 0`. | `unit` | `crates/rincon-audio/src/convert.rs:25`<br>`crates/rincon-audio/src/convert.rs:81` |
-| `RQ-AUD-006` | A NaN or infinite input sample MUST convert to silence (`0`), never to an arbitrary value. | `property` | `crates/rincon-audio/src/convert.rs:25`<br>`crates/rincon-audio/src/convert.rs:107` |
-| `RQ-AUD-007` | The crate MUST expose a `SyntheticCapture` backend on every platform, producing a deterministic signal from a seed. | `unit` | `crates/rincon-audio/src/synthetic.rs:56`<br>`crates/rincon-audio/src/synthetic.rs:221` |
-| `RQ-AUD-008` | Dropping a `CaptureSession` MUST stop the underlying stream and MUST NOT leak the OS handle. | `integration` | `crates/rincon-audio/src/lib.rs:271`<br>`crates/rincon-audio/src/loopback.rs:290` |
-| `RQ-AUD-009` | Ring capacity MUST be configurable and MUST default to at least 500 ms of audio at the negotiated format. | `unit` | `crates/rincon-audio/src/ring.rs:155`<br>`crates/rincon-audio/src/ring.rs:481` |
-| `RQ-AUD-010` | When the device disappears, the consumer MUST observe a terminal `DeviceLost` state rather than blocking forever or silently returning silence. | `unit` | `crates/rincon-audio/src/ring.rs:240`<br>`crates/rincon-audio/src/ring.rs:282`<br>`crates/rincon-audio/src/ring.rs:499` |
-| `RQ-AUD-011` | Interleaved multi-channel frames MUST round-trip through the ring in channel order. | `property` | `crates/rincon-audio/src/ring.rs:195`<br>`crates/rincon-audio/src/ring.rs:282`<br>`crates/rincon-audio/src/ring.rs:517` |
+| `RQ-AUD-001` | The producer path MUST NOT allocate, lock, or perform I/O once capture has started. | `unit` | `crates/rincon-audio/src/ring.rs:190`<br>`crates/rincon-audio/src/ring.rs:382` |
+| `RQ-AUD-002` | The ring MUST preserve frame alignment: a partial frame MUST never be visible to the consumer. | `property` | `crates/rincon-audio/src/ring.rs:190`<br>`crates/rincon-audio/src/ring.rs:277`<br>`crates/rincon-audio/src/ring.rs:414` |
+| `RQ-AUD-003` | On overrun the ring MUST discard the **oldest** whole frames and increment `frames_dropped` by exactly the number discarded. | `property` | `crates/rincon-audio/src/ring.rs:190`<br>`crates/rincon-audio/src/ring.rs:434` |
+| `RQ-AUD-004` | `f32` samples outside `[-1.0, 1.0]` MUST be clamped, never wrapped, when converted to `i16`. | `property` | `crates/rincon-audio/src/convert.rs:25`<br>`crates/rincon-audio/src/convert.rs:93` |
+| `RQ-AUD-005` | Conversion endpoints MUST be exact: `+1.0 → 32767`, `-1.0 → -32768`, `0.0 → 0`. | `unit` | `crates/rincon-audio/src/convert.rs:25`<br>`crates/rincon-audio/src/convert.rs:80` |
+| `RQ-AUD-006` | A NaN or infinite input sample MUST convert to silence (`0`), never to an arbitrary value. | `property` | `crates/rincon-audio/src/convert.rs:25`<br>`crates/rincon-audio/src/convert.rs:106` |
+| `RQ-AUD-007` | The crate MUST expose a `SyntheticCapture` backend on every platform, producing a deterministic signal from a seed. | `unit` | `crates/rincon-audio/src/synthetic.rs:56`<br>`crates/rincon-audio/src/synthetic.rs:225` |
+| `RQ-AUD-008` | Dropping a `CaptureSession` MUST stop the underlying stream and MUST NOT leak the OS handle. | `integration` | `crates/rincon-audio/src/lib.rs:271`<br>`crates/rincon-audio/src/loopback.rs:284` |
+| `RQ-AUD-009` | Ring capacity MUST be configurable and MUST default to at least 500 ms of audio at the negotiated format. | `unit` | `crates/rincon-audio/src/ring.rs:155`<br>`crates/rincon-audio/src/ring.rs:476` |
+| `RQ-AUD-010` | When the device disappears, the consumer MUST observe a terminal `DeviceLost` state rather than blocking forever or silently returning silence. | `unit` | `crates/rincon-audio/src/ring.rs:235`<br>`crates/rincon-audio/src/ring.rs:277`<br>`crates/rincon-audio/src/ring.rs:494` |
+| `RQ-AUD-011` | Interleaved multi-channel frames MUST round-trip through the ring in channel order. | `property` | `crates/rincon-audio/src/ring.rs:190`<br>`crates/rincon-audio/src/ring.rs:277`<br>`crates/rincon-audio/src/ring.rs:512` |
 
 ## 6. Failure modes
 

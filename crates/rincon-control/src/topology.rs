@@ -106,8 +106,9 @@ impl Topology {
 pub fn parse(document: &str) -> Result<Topology, TopologyError> {
     xml::reject_doctype(document)?;
 
+    // Attribute-driven, so text trimming is irrelevant here -- but the reader is configured
+    // identically to the other two parsers so that all three behave the same way.
     let mut reader = Reader::from_str(document);
-    reader.config_mut().trim_text(true);
 
     let mut topology = Topology::default();
     let mut current_coordinator: Option<String> = None;
@@ -151,7 +152,11 @@ fn collect_attributes(element: &quick_xml::events::BytesStart<'_>) -> BTreeMap<S
         .filter_map(Result::ok)
         .filter_map(|attribute| {
             let key = String::from_utf8_lossy(attribute.key.as_ref()).into_owned();
-            let value = attribute.unescape_value().ok()?.into_owned();
+            // XML 1.0 rules. Sonos topology documents declare 1.0, and 1.1 differs only in
+            // how exotic line separators inside an attribute normalise -- not something a zone
+            // name contains, and not something we would want normalised differently if it did.
+            let value =
+                attribute.normalized_value(quick_xml::XmlVersion::Explicit1_0).ok()?.into_owned();
             Some((key, value))
         })
         .collect()

@@ -130,9 +130,9 @@ docs:
 # Supply chain
 # ---------------------------------------------------------------------------------------
 
-# Licences, advisories, sources, and bans.
+# Licences, advisories, sources, and bans. Feature selection comes from deny.toml's [graph].
 deny:
-    cargo deny check --all-features
+    cargo deny check
 
 # Known vulnerabilities in the dependency tree.
 audit:

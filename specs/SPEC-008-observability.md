@@ -48,7 +48,7 @@ Three layers, each with a different audience:
 | `RQ-OBS-001` | Every dropped frame MUST be counted and attributed to exactly one layer. | `unit` | `crates/rincon-core/src/metrics.rs:87`<br>`crates/rincon-core/src/metrics.rs:279` |
 | `RQ-OBS-002` | Counters MUST be readable without locking and without perturbing the audio path. | `unit` | `crates/rincon-core/src/metrics.rs:302` |
 | `RQ-OBS-003` | Logs MUST default to `info`, be overridable by `RINCON_LOG`, and MUST NOT include audio samples. | `unit` | `crates/rincon-core/src/telemetry.rs:53`<br>`crates/rincon-core/src/telemetry.rs:204`<br>`crates/rincon-core/src/telemetry.rs:217`<br>`crates/rincon-core/src/telemetry.rs:262` |
-| `RQ-OBS-004` | Log output MUST redact the stream token, replacing it with `<redacted>`. | `unit` | `crates/rincon-core/src/stream_url.rs:136`<br>`crates/rincon-stream/src/token.rs:191` |
+| `RQ-OBS-004` | Log output MUST redact the stream token, replacing it with `<redacted>`. | `unit` | `crates/rincon-core/src/stream_url.rs:133`<br>`crates/rincon-stream/src/token.rs:202` |
 | `RQ-OBS-005` | The log file MUST be size-capped at 10 MB with rotation; it MUST NOT be able to fill the disk. | `unit` | `crates/rincon-core/src/telemetry.rs:217`<br>`crates/rincon-core/src/telemetry.rs:282` |
 | `RQ-OBS-006` | A diagnostics bundle MUST include app version, OS build, interface summary, counters, and the last 500 log lines. | `unit` | `crates/rincon-core/src/diagnostics.rs:145`<br>`crates/rincon-core/src/diagnostics.rs:270` |
 | `RQ-OBS-007` | The bundle MUST redact the stream token, the machine hostname, and all but the last octet of each IP. | `property` | `crates/rincon-core/src/diagnostics.rs:289` |

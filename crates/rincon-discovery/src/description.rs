@@ -88,7 +88,10 @@ pub fn parse(document: &str) -> Result<DeviceDescription, DescriptionError> {
     xml::reject_doctype(document)?;
 
     let mut reader = Reader::from_str(document);
-    reader.config_mut().trim_text(true);
+    // Deliberately *not* `trim_text(true)`. An entity reference splits a value across several
+    // Text events, and per-fragment trimming would eat the interior spaces: `Kitchen &amp;
+    // Dining` would arrive as `Kitchen&Dining`. The accumulated value is trimmed once, when
+    // the element closes.
 
     let mut raw = Raw::default();
     // Element path depth. The root device's fields sit at depth 3:
@@ -97,6 +100,11 @@ pub fn parse(document: &str) -> Result<DeviceDescription, DescriptionError> {
     let mut current: Option<String> = None;
     // Once we enter a `deviceList`, everything below belongs to a sub-device.
     let mut in_sub_device = 0_usize;
+    // Text is accumulated rather than taken from the first fragment, because an entity
+    // reference splits a value into several events: `Kitchen &amp; Dining` arrives as
+    // Text("Kitchen ") + GeneralRef("amp") + Text(" Dining"). Keeping only the first piece
+    // would silently truncate every name containing an ampersand.
+    let mut buffer = String::new();
 
     loop {
         match reader.read_event() {
@@ -107,25 +115,36 @@ pub fn parse(document: &str) -> Result<DeviceDescription, DescriptionError> {
                     in_sub_device += 1;
                 }
                 current = Some(name);
+                buffer.clear();
             }
             Ok(Event::End(element)) => {
                 let name = local_name(element.name().as_ref());
+                // Commit while `depth` still refers to the element that is closing.
+                if let Some(field) = current.take() {
+                    if in_sub_device == 0 && depth <= 3 {
+                        store(&mut raw, &field, buffer.trim().to_owned());
+                    }
+                }
+                buffer.clear();
                 if name.eq_ignore_ascii_case("deviceList") {
                     in_sub_device = in_sub_device.saturating_sub(1);
                 }
                 depth = depth.saturating_sub(1);
-                current = None;
             }
             Ok(Event::Text(text)) => {
-                if in_sub_device > 0 || depth > 3 {
-                    continue;
+                let decoded = text
+                    .xml10_content()
+                    .map_err(|source| DescriptionError::Malformed(source.to_string()))?;
+                buffer.push_str(&decoded);
+            }
+            Ok(Event::GeneralRef(reference)) => {
+                // The event carries the reference's *name*, not its value. Resolving it is
+                // what stops `Kitchen &amp; Dining` arriving as `Kitchen amp Dining`.
+                if let Ok(name) = reference.decode() {
+                    if let Some(resolved) = xml::resolve_reference(&name) {
+                        buffer.push_str(&resolved);
+                    }
                 }
-                let Some(field) = current.as_deref() else { continue };
-                let value = text
-                    .unescape()
-                    .map_err(|source| DescriptionError::Malformed(source.to_string()))?
-                    .into_owned();
-                store(&mut raw, field, value);
             }
             Ok(Event::Eof) => break,
             Err(source) => return Err(DescriptionError::Malformed(source.to_string())),

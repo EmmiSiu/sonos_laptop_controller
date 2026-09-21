@@ -65,7 +65,11 @@ url          = "2"
 # --- data & serialisation ---
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
-quick-xml  = "0.37"
+# Pinned at >= 0.41: earlier versions allocate without bound for a start tag that
+# declares arbitrarily many namespace bindings (RUSTSEC via GHSA, quick-xml#970).
+# Every XML document we parse comes from an unauthenticated device on the LAN, so
+# this is squarely in the threat model (SPEC-007 §8 row 5).
+quick-xml  = "0.41"
 bytes      = "1"
 
 # --- errors, logging, time ---

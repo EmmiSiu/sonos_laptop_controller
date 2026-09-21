@@ -70,6 +70,34 @@ pub fn reject_doctype_with_limit(document: &str, limit: usize) -> Result<(), Xml
     Ok(())
 }
 
+/// Resolves an entity or character reference that the parser reported as its own event.
+///
+/// # Why this is needed at all
+///
+/// `quick-xml` 0.38 stopped folding references into the surrounding text and began emitting
+/// `Event::GeneralRef` for each one, carrying the *name* between `&` and `;` rather than the
+/// value. A parser written against the old behaviour keeps compiling and silently drops every
+/// `&amp;` — so a room called "Kitchen & Dining" becomes "Kitchen  Dining", and a topology
+/// document nested as escaped XML is truncated at its first `&lt;`.
+///
+/// Both of Rincon's XML parsers hit this, which is why the resolver lives here rather than
+/// being written twice.
+///
+/// Returns `None` for a reference this document is not allowed to use. Since
+/// [`reject_doctype`] has already refused any document that *declares* an entity, the only
+/// legitimate references are the five predefined ones and numeric character references;
+/// anything else is malformed and is dropped rather than guessed at.
+///
+/// Covers: RQ-SEC-002
+#[must_use]
+pub fn resolve_reference(name: &str) -> Option<String> {
+    // Reassembling the reference and handing it to the crate's own table is deliberate: the
+    // alternative is a hand-written match over five entities plus decimal and hexadecimal
+    // character references, which is four more chances to get a security-relevant decoder
+    // subtly wrong.
+    quick_xml::escape::unescape(&format!("&{name};")).ok().map(std::borrow::Cow::into_owned)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -145,6 +173,32 @@ mod tests {
         // name containing an ampersand, which is a real thing users do.
         let doc = "<root><roomName>Kitchen &amp; Dining</roomName></root>";
         reject_doctype(doc).expect("entity references must stay legal");
+    }
+
+    /// Covers: RQ-SEC-002
+    #[test]
+    fn rq_sec_002_references_resolve_to_their_values_not_their_names() {
+        // The regression this pins down was live for exactly one dependency bump: the parser
+        // was handed "lt" and stored it verbatim, so every escaped character in a device
+        // document silently became the letters of its entity name.
+        assert_eq!(resolve_reference("lt").as_deref(), Some("<"));
+        assert_eq!(resolve_reference("gt").as_deref(), Some(">"));
+        assert_eq!(resolve_reference("amp").as_deref(), Some("&"));
+        assert_eq!(resolve_reference("quot").as_deref(), Some("\""));
+        assert_eq!(resolve_reference("apos").as_deref(), Some("'"));
+
+        // Numeric character references, decimal and hexadecimal.
+        assert_eq!(resolve_reference("#10").as_deref(), Some("\n"));
+        assert_eq!(resolve_reference("#x41").as_deref(), Some("A"));
+    }
+
+    #[test]
+    fn an_undeclared_entity_resolves_to_nothing_rather_than_a_guess() {
+        // The guard refuses any document that declares an entity, so a reference to one is
+        // malformed. Dropping it beats inventing a value or leaking the name into the UI.
+        for name in ["xxe", "", "not a name", "#", "#x", "#xZZ", "#99999999999"] {
+            assert!(resolve_reference(name).is_none(), "`{name}` must not resolve");
+        }
     }
 
     #[test]
