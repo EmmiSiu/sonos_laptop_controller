@@ -11,16 +11,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use rincon_audio::AudioCapture;
 use rincon_core::audio::{AudioFormat, SampleEncoding};
 use rincon_core::telemetry::{self, TelemetryConfig};
 use rincon_engine::{Dependencies, Engine, EngineConfig};
-use rincon_ipc::{Api, DeviceDto, DiagnosticsDto, FirewallDto, IpcResult, SessionDto};
+use rincon_ipc::{Api, CounterUpdateDto, DeviceDto, DiagnosticsDto, FirewallDto, IpcResult, SessionDto};
 use tauri::{Emitter as _, State};
 
 /// The event the frontend listens on. One per state transition; the frontend never polls.
 const SESSION_EVENT: &str = "rincon://session";
+
+/// Live metrics travel separately so refreshing a number cannot masquerade as a transition.
+///
+/// Covers: RQ-UI-012
+const COUNTERS_EVENT: &str = "rincon://counters";
+const COUNTERS_PUSH_INTERVAL: Duration = Duration::from_millis(250);
 
 #[tauri::command]
 async fn scan_devices(api: State<'_, Arc<Api>>) -> IpcResult<Vec<DeviceDto>> {
@@ -70,15 +77,34 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::clone(&api))
         .setup(move |app| {
-            // Push state changes rather than letting the interface poll. A 4 Hz poll would
-            // make the five-step connect stepper look like it skips steps.
-            let handle = app.handle().clone();
-            let engine = Arc::clone(api.engine());
-            let pushed = Arc::clone(&api);
+            // Lifecycle updates are lossless transitions. They stay separate from the 4 Hz
+            // metric snapshots so the five-step connect stepper cannot skip a state and
+            // `RQ-ENG-009` remains exactly one published message per transition.
+            let state_handle = app.handle().clone();
+            let state_engine = Arc::clone(api.engine());
+            let state_api = Arc::clone(&api);
             tauri::async_runtime::spawn(async move {
-                let mut states = engine.subscribe();
+                let mut states = state_engine.subscribe();
                 while states.recv().await.is_ok() {
-                    let _ = handle.emit(SESSION_EVENT, pushed.session_state());
+                    let _ = state_handle.emit(SESSION_EVENT, state_api.session_state());
+                }
+            });
+
+            // Counters are sampled in the host and pushed; the renderer never invokes a
+            // command on a timer. Nothing is emitted while idle, so the channel costs no work
+            // outside a live session and a late event cannot revive stopped state.
+            let counter_handle = app.handle().clone();
+            let counter_engine = Arc::clone(api.engine());
+            let counter_api = Arc::clone(&api);
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(COUNTERS_PUSH_INTERVAL);
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    if counter_engine.state().is_live() {
+                        let update: CounterUpdateDto = counter_api.counter_update();
+                        let _ = counter_handle.emit(COUNTERS_EVENT, update);
+                    }
                 }
             });
             Ok(())

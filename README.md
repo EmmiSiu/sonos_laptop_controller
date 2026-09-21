@@ -7,7 +7,7 @@
 [![CI](https://github.com/EmmiSiu/rincon/actions/workflows/ci.yml/badge.svg)](https://github.com/EmmiSiu/rincon/actions/workflows/ci.yml)
 [![Security](https://github.com/EmmiSiu/rincon/actions/workflows/security.yml/badge.svg)](https://github.com/EmmiSiu/rincon/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](rust-toolchain.toml)
+[![Rust 1.88+](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](rust-toolchain.toml)
 [![Spec-driven](https://img.shields.io/badge/development-spec--driven-6f42c1.svg)](specs/README.md)
 
 </div>

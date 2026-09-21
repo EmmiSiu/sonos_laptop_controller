@@ -14,6 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
+  CounterUpdateDto,
   DeviceDto,
   DiagnosticsDto,
   FirewallDto,
@@ -23,6 +24,7 @@ import type {
 
 /** The event the backend pushes on every state transition. The interface never polls. */
 const SESSION_EVENT = "rincon://session";
+const COUNTERS_EVENT = "rincon://counters";
 
 /** Narrows an unknown rejection to the shape the backend promises. */
 export function isIpcError(value: unknown): value is IpcError {
@@ -107,4 +109,9 @@ export function diagnostics(): Promise<DiagnosticsDto> {
 /** Subscribes to session state pushes. Returns the unsubscribe function. */
 export function onSession(handler: (session: SessionDto) => void): Promise<UnlistenFn> {
   return listen<SessionDto>(SESSION_EVENT, (event) => handler(event.payload));
+}
+
+/** Subscribes to the host's 4 Hz counter snapshots. This never represents a state change. */
+export function onCounters(handler: (update: CounterUpdateDto) => void): Promise<UnlistenFn> {
+  return listen<CounterUpdateDto>(COUNTERS_EVENT, (event) => handler(event.payload));
 }

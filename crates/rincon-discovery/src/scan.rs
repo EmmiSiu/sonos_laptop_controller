@@ -215,6 +215,19 @@ pub fn preferred_lan_interface() -> Option<Ipv4Addr> {
 /// Covers: RQ-DISC-009, RQ-DISC-010, RQ-DISC-011
 pub async fn scan(config: ScanConfig) -> Result<ScanOutcome, ScanError> {
     let interfaces = probe_interfaces();
+    scan_interfaces(interfaces, config).await
+}
+
+/// Probes a known set of interfaces as one bounded scan.
+///
+/// Keeping this separate from interface enumeration makes the timeout contract testable on a
+/// machine that has real speakers. More importantly, every interface is probed concurrently:
+/// `ScanConfig::window` is the budget for the scan, not a budget multiplied by the number of
+/// VPNs and virtual switches installed on the laptop.
+async fn scan_interfaces(
+    interfaces: Vec<Ipv4Addr>,
+    config: ScanConfig,
+) -> Result<ScanOutcome, ScanError> {
     if interfaces.is_empty() {
         return Err(ScanError::NoInterface);
     }
@@ -223,8 +236,10 @@ pub async fn scan(config: ScanConfig) -> Result<ScanOutcome, ScanError> {
     let mut probed = Vec::new();
     let mut last_error = None;
 
-    for local in interfaces {
-        match probe_one(local, config).await {
+    let attempts =
+        interfaces.into_iter().map(|local| async move { (local, probe_one(local, config).await) });
+    for (local, result) in futures::future::join_all(attempts).await {
+        match result {
             Ok(found) => {
                 probed.push(local);
                 for response in found {
@@ -552,17 +567,19 @@ mod tests {
     /// Covers: RQ-DISC-011
     #[tokio::test]
     async fn rq_disc_011_respects_timeout() {
-        // No responder exists, so this exercises the worst case: every interface waits out
-        // the full window. It must still return inside window + slack.
+        // Loopback cannot reach the real Sonos on the LAN, so this remains a no-responder test
+        // even on a developer's machine. The old test enumerated real adapters; if a speaker
+        // answered, its description fetch was charged to a requirement specifically about the
+        // no-answer path and the assertion became dependent on the room it ran in.
         let config = ScanConfig { window: Duration::from_millis(300), ..Default::default() };
         let started = Instant::now();
-        let outcome =
-            scan(config).await.expect("a scan with no devices is a success, not an error");
+        let outcome = scan_interfaces(vec![Ipv4Addr::LOCALHOST], config)
+            .await
+            .expect("a scan with no devices is a success, not an error");
         let elapsed = started.elapsed();
 
-        assert!(outcome.is_empty() || !outcome.devices.is_empty());
-        let interfaces = probe_interfaces().len() as u32;
-        let ceiling = config.window * interfaces + limits::DISCOVERY_SLACK * 2;
+        assert!(outcome.is_empty(), "loopback unexpectedly resolved a LAN device");
+        let ceiling = config.window + limits::DISCOVERY_SLACK;
         assert!(elapsed <= ceiling, "scan took {elapsed:?}, over the {ceiling:?} ceiling");
     }
 

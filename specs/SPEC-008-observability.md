@@ -6,7 +6,7 @@ owner: EmmiSiu
 crate: workspace (cross-cutting)
 depends_on: [SPEC-005, SPEC-007]
 supersedes: null
-last_reviewed: 2026-09-20
+last_reviewed: 2026-09-21
 ---
 
 # SPEC-008 — Observability & diagnostics
@@ -38,7 +38,7 @@ Three layers, each with a different audience:
 
 | Layer | Audience | Mechanism | Retention |
 | ----- | -------- | --------- | --------- |
-| Counters | UI health indicator | Lock-free atomics, polled at 4 Hz | Session lifetime |
+| Counters | UI health indicator | Lock-free atomics, sampled by the host and pushed at 4 Hz | Session lifetime |
 | Spans & events | Maintainer debugging a report | `tracing`, rolling file | 7 days / 10 MB cap |
 | Bundle | Issue attachment | Redacted snapshot on demand | User-controlled |
 

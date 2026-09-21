@@ -21,13 +21,15 @@ If that is green, you are set up correctly.
 
 | Tool | Version | Why |
 | ---- | ------- | --- |
-| Rust | stable, 1.85+ | Edition 2024 and workspace lints |
+| Rust | stable; core 1.85+, desktop 1.88+ | Edition 2024, workspace lints, patched Tauri dependencies |
 | Node | 20+ | The frontend build and `spec-guard` |
 | `just` | any | The task runner. Optional: `scripts/verify.sh` does the same thing |
 
 `rust-toolchain.toml` pins the channel, so `rustup` installs the right one on first `cargo`
-invocation. The MSRV that actually gates compilation is `rust-version` in the workspace
-manifest, and CI has a job that builds against exactly it.
+invocation. The core MSRV is the workspace `rust-version` and CI builds against exactly it.
+The Tauri shell is a separate workspace with MSRV 1.88: `plist` 1.9+ is the first release that
+uses a non-vulnerable XML parser, and accepting its higher compiler floor is safer than pinning
+the shipped desktop app to an advisory-bearing transitive dependency.
 
 ### Windows
 

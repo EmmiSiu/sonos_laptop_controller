@@ -6,7 +6,7 @@ owner: EmmiSiu
 crate: apps/desktop
 depends_on: [SPEC-005, SPEC-007]
 supersedes: null
-last_reviewed: 2026-09-20
+last_reviewed: 2026-09-21
 ---
 
 # SPEC-006 — IPC boundary & interface
@@ -48,8 +48,10 @@ broken through no fault of the code.
 #[tauri::command] async fn firewall_status(state: State<'_, App>) -> IpcResult<FirewallDto>;
 ```
 
-Push direction: a single `rincon://session` event carrying `SessionDto` on every transition.
-The frontend never polls.
+Push direction has two typed channels. `rincon://session` carries one `SessionDto` for every
+lifecycle transition. `rincon://counters` carries a `CounterUpdateDto` at 4 Hz while the session
+is streaming or degraded. The frontend never polls an IPC command; metric refreshes are pushed
+by the host and cannot be mistaken for state transitions.
 
 ## 5. Requirements
 
@@ -66,6 +68,7 @@ The frontend never polls.
 | `RQ-UI-009` | The window MUST remain interactive during a scan; no command may block the UI thread. | `manual` | `docs/manual-test-log.md:33` |
 | `RQ-UI-010` | `withGlobalTauri` MUST be `false`, and the app MUST enable only the capabilities it uses. | `unit` | `scripts/spec-guard.mjs:124` |
 | `RQ-UI-011` | Displayed device text MUST be rendered as text, and MUST be truncated at 64 characters. | `unit` | `crates/rincon-core/src/device.rs:102`<br>`crates/rincon-core/src/device.rs:222`<br>`apps/desktop/src/lib/sanitize.spec.ts:6`<br>`apps/desktop/src/lib/sanitize.spec.ts:20` |
+| `RQ-UI-012` | While streaming or degraded, counter snapshots MUST be pushed to the UI at 4 Hz on a channel separate from lifecycle transitions; the renderer MUST NOT poll an IPC command. | `integration` | `crates/rincon-ipc/src/lib.rs`<br>`apps/desktop/src-tauri/src/main.rs`<br>`apps/desktop/src/lib/session.spec.ts` |
 
 ## 6. Interface states
 

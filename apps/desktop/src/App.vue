@@ -20,19 +20,22 @@ import PrepareStepper from "./components/PrepareStepper.vue";
 import RadarIdle from "./components/RadarIdle.vue";
 import * as api from "./lib/api";
 import type { DeviceDto, IpcError, SessionDto } from "./lib/bindings";
+import { stateLabel, withCounterUpdate } from "./lib/session";
 
 const session = ref<SessionDto | null>(null);
 const devices = ref<DeviceDto[]>([]);
 const error = ref<IpcError | null>(null);
 const busy = ref(false);
 
-let unlisten: (() => void) | null = null;
+let unlistenSession: (() => void) | null = null;
+let unlistenCounters: (() => void) | null = null;
 
 const state = computed(() => session.value?.detail.state ?? "idle");
+const displayState = computed(() => stateLabel(state.value));
 const scanning = computed(() => state.value === "scanning" || busy.value);
 
 onMounted(async () => {
-  unlisten = await api.onSession((next) => {
+  unlistenSession = await api.onSession((next) => {
     session.value = next;
     // A fresh scan result replaces the list; anything else leaves it alone so the cards do
     // not vanish while a connection is being prepared.
@@ -40,10 +43,18 @@ onMounted(async () => {
       devices.value = next.detail.devices;
     }
   });
+  unlistenCounters = await api.onCounters((update) => {
+    if (session.value) {
+      session.value = withCounterUpdate(session.value, update);
+    }
+  });
   session.value = await api.sessionState();
 });
 
-onUnmounted(() => unlisten?.());
+onUnmounted(() => {
+  unlistenSession?.();
+  unlistenCounters?.();
+});
 
 /** Wraps a command so every failure lands in one place and the button cannot double-fire. */
 async function run(action: () => Promise<unknown>): Promise<void> {
@@ -91,7 +102,7 @@ const setVolume = (level: number) => run(() => api.setVolume(level));
           'bg-rose-500/15 text-rose-300': state === 'failed',
         }"
       >
-        {{ session?.state ?? "idle" }}
+        {{ displayState }}
       </span>
     </header>
 

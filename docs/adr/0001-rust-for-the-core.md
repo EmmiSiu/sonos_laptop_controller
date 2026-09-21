@@ -33,7 +33,8 @@ accidentally cross into the callback because the type system refuses.
 
 ## Decision
 
-Rust, edition 2024, MSRV 1.85.
+Rust, edition 2024. Core crates retain MSRV 1.85; the separately built Tauri shell requires
+1.88 because that is the minimum supported by the patched `plist` dependency.
 
 ## Consequences
 

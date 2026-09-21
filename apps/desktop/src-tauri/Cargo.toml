@@ -3,7 +3,7 @@ name        = "rincon-desktop"
 description = "The Rincon desktop shell: a thin Tauri wrapper over rincon-ipc."
 version      = "0.1.0"
 edition      = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license      = "MIT"
 authors      = ["Rincon contributors"]
 publish      = false
@@ -31,7 +31,7 @@ default  = ["loopback"]
 loopback = ["rincon-audio/loopback"]
 
 [build-dependencies]
-tauri-build = "2"
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 rincon-core      = { path = "../../../crates/rincon-core" }
@@ -41,6 +41,7 @@ rincon-discovery = { path = "../../../crates/rincon-discovery" }
 rincon-engine    = { path = "../../../crates/rincon-engine" }
 rincon-ipc       = { path = "../../../crates/rincon-ipc" }
 serde            = { version = "1", features = ["derive"] }
+tokio            = { version = "1", features = ["time"] }
 tracing          = "0.1"
 tauri            = { version = "2", features = [] }
 tauri-plugin-opener = "2"

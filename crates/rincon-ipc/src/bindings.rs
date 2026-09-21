@@ -109,6 +109,13 @@ export interface CounterSnapshot {{
   dropped_no_consumer: number;
 }}
 
+/** A live counter refresh. It does not represent a lifecycle transition. */
+export interface CounterUpdateDto {{
+  counters: CounterSnapshot;
+  /** Frames a listener would have heard and did not. Excludes the pre-connection window. */
+  droppedFrames: number;
+}}
+
 /** Everything the interface needs to render one frame of the session. */
 export interface SessionDto {{
   state: string;

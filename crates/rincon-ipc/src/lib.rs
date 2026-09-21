@@ -156,6 +156,26 @@ pub struct SessionDto {
     pub latency_note: Option<&'static str>,
 }
 
+/// A live counter snapshot pushed independently from lifecycle transitions.
+///
+/// Keeping this smaller than [`SessionDto`] prevents a 4 Hz metrics refresh from pretending
+/// the state machine transitioned. The derived total is carried by Rust so the health model
+/// and the number beside it cannot acquire different definitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CounterUpdateDto {
+    /// Every raw counter, including frames discarded while nobody was listening.
+    pub counters: CounterSnapshot,
+    /// Frames a listener would have heard and did not.
+    pub dropped_frames: u64,
+}
+
+impl From<CounterSnapshot> for CounterUpdateDto {
+    fn from(counters: CounterSnapshot) -> Self {
+        Self { dropped_frames: counters.quality_drops(), counters }
+    }
+}
+
 /// The sentence the interface must show while connected.
 ///
 /// A constant rather than a string in a component, so the interface cannot ship without it and
@@ -345,6 +365,14 @@ impl Api {
             counters,
             latency_note,
         }
+    }
+
+    /// The current lock-free counter snapshot for the metrics push channel.
+    ///
+    /// Covers: RQ-UI-012
+    #[must_use]
+    pub fn counter_update(&self) -> CounterUpdateDto {
+        self.engine.counters().map(|c| c.snapshot()).unwrap_or_default().into()
     }
 
     /// Advice for a suspected firewall block.
@@ -572,6 +600,23 @@ mod tests {
         // The note itself says the thing a user needs to hear before they try a film.
         assert!(LATENCY_NOTE.contains("1-2 seconds"));
         assert!(LATENCY_NOTE.to_lowercase().contains("video"));
+    }
+
+    /// Covers: RQ-UI-012
+    #[test]
+    fn rq_ui_012_counter_updates_use_the_health_definition() {
+        let counters = CounterSnapshot {
+            dropped_capture: 2,
+            dropped_ring: 3,
+            dropped_socket: 5,
+            dropped_device: 7,
+            dropped_no_consumer: 313_920,
+            ..CounterSnapshot::default()
+        };
+
+        let update = CounterUpdateDto::from(counters);
+        assert_eq!(update.counters, counters);
+        assert_eq!(update.dropped_frames, 17, "pre-connect loss reached the quality total");
     }
 
     #[tokio::test]

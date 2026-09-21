@@ -50,7 +50,23 @@ jobs:
       - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2
         with:
           tool: cargo-audit
-      - run: cargo audit --deny warnings
+      - name: audit the core workspace lockfile
+        run: cargo audit --deny warnings
+      - name: audit the separately locked Tauri shell
+        # The desktop shell is excluded from the core workspace, so auditing only the root
+        # lockfile missed two high-severity quick-xml advisories in the binary we ship.
+        # The allowlist is limited to Tauri 2.11's known upstream warnings: legacy UNIC crates
+        # behind URLPattern, a proc-macro helper, and glib's Linux-only iterator advisory.
+        # Vulnerabilities are never allowlisted, and any new warning still turns CI red.
+        run: >-
+          cargo audit --deny warnings --file apps/desktop/src-tauri/Cargo.lock
+          --ignore RUSTSEC-2024-0370
+          --ignore RUSTSEC-2025-0075
+          --ignore RUSTSEC-2025-0080
+          --ignore RUSTSEC-2025-0081
+          --ignore RUSTSEC-2025-0098
+          --ignore RUSTSEC-2025-0100
+          --ignore RUSTSEC-2024-0429
 
   secrets:
     name: gitleaks
