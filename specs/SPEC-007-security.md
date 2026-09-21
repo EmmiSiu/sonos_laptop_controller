@@ -90,7 +90,7 @@ Stated so that the boundary is a decision, not an oversight:
 | `RQ-SEC-004` | No parser in the workspace MAY panic on adversarial input. | `fuzz` | `.github/workflows/fuzz.yml:25` |
 | `RQ-SEC-005` | Secrets (the stream token) MUST be compared in constant time and MUST NOT appear in logs. | `unit` | `crates/rincon-core/src/stream_url.rs:82`<br>`crates/rincon-core/src/stream_url.rs:133`<br>`crates/rincon-core/src/stream_url.rs:163`<br>`crates/rincon-stream/src/token.rs:75`<br>`crates/rincon-stream/src/token.rs:202` |
 | `RQ-SEC-006` | The audio stream MUST be reachable only by an allowlisted peer IP. | `integration` | `crates/rincon-stream/src/lib.rs:83` |
-| `RQ-SEC-007` | Capture MUST NOT run unless a session is active; stopping a session MUST stop capture. | `integration` | `crates/rincon-audio/src/lib.rs:271`<br>`crates/rincon-engine/src/lib.rs:146`<br>`crates/rincon-engine/src/lib.rs:234` |
+| `RQ-SEC-007` | Capture MUST NOT run unless a session is active; stopping a session MUST stop capture. | `integration` | `crates/rincon-audio/src/lib.rs:271`<br>`crates/rincon-engine/src/lib.rs:231`<br>`crates/rincon-engine/src/lib.rs:319` |
 | `RQ-SEC-008` | The app MUST NOT write captured audio to disk unless the user explicitly requests a dump. | `unit` | `crates/rincon-audio/src/lib.rs:288` |
 | `RQ-SEC-009` | The app MUST make zero network requests at startup: no update check, no telemetry, no ping. | `integration` | `.github/workflows/security.yml:85` |
 | `RQ-SEC-010` | `unsafe` MUST be denied workspace-wide; an exception requires an ADR. | `unit` | `scripts/spec-guard.mjs:124` |

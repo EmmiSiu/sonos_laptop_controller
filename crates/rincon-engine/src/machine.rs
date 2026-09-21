@@ -23,7 +23,7 @@
 
 use rincon_core::audio::AudioFormat;
 use rincon_core::device::Device;
-use rincon_core::metrics::Health;
+use rincon_core::metrics::{CounterSnapshot, Health};
 use rincon_core::stream_url::StreamUrl;
 use serde::{Deserialize, Serialize};
 
@@ -328,6 +328,11 @@ pub enum Event {
     HealthDropped(DegradeReason),
     /// Quality recovered.
     HealthRecovered,
+    /// Quality is still acceptable, but not the same shade of acceptable.
+    ///
+    /// Distinct from the two above because it does not move the session between `Streaming`
+    /// and `Degraded`: it only updates what the indicator shows.
+    HealthChanged(Health),
     /// The user asked to stop.
     Disconnect,
     /// Teardown finished.
@@ -360,6 +365,12 @@ pub enum Effect {
     Play(Box<Device>),
     /// Start the timer that decides "firewall" versus "still buffering".
     ArmPeerTimeout,
+    /// Begin sampling the counters and reporting health.
+    ///
+    /// Emitted once, when the speaker first connects. Recovering from `Degraded` does not
+    /// re-emit it, because the watch runs for as long as the session is live and a second one
+    /// would double every observation.
+    WatchHealth,
     /// Tell the speaker to stop.
     StopPlayback(Box<Device>),
     /// Shut the HTTP server down.
@@ -534,10 +545,12 @@ pub fn step(state: SessionState, event: Event) -> Transition {
                 S::Streaming {
                     target,
                     url,
+                    // Optimistic by construction, and true for about half a second: the watch
+                    // this effect starts replaces it with a measurement on its first tick.
                     health: Health::Good,
                     format: format.unwrap_or(AudioFormat::WIRE_DEFAULT),
                 },
-                Vec::new(),
+                vec![Effect::WatchHealth],
             )
         }
 
@@ -571,6 +584,14 @@ pub fn step(state: SessionState, event: Event) -> Transition {
         }
         (S::Degraded { target, url, format, .. }, E::HealthRecovered) => {
             Transition::to(S::Streaming { target, url, health: Health::Good, format }, Vec::new())
+        }
+        (S::Streaming { target, url, format, health }, E::HealthChanged(observed)) => {
+            // Reporting an unchanged value as a change would publish a state update every
+            // half second for the life of the session, and every subscriber would re-render.
+            if observed == health {
+                return Transition::inert(S::Streaming { target, url, format, health });
+            }
+            Transition::to(S::Streaming { target, url, format, health: observed }, Vec::new())
         }
         (S::Degraded { target, .. }, E::PeerLost) => {
             let effects = teardown(&target);
@@ -622,6 +643,53 @@ pub fn step(state: SessionState, event: Event) -> Transition {
         // that makes late replies from cancelled operations harmless.
         (state, _) => Transition::inert(state),
     }
+}
+
+/// Turns an observed [`Health`] into the event that should be dispatched, if any.
+///
+/// This lives beside the reducer rather than in the driver on purpose. Choosing between
+/// "degrade", "recover" and "just relabel" is a decision about the session's direction, and
+/// `driver.rs` is not allowed to make those — see its module docs. Keeping it here also means
+/// it is testable without a clock, a socket or a runtime.
+///
+/// Returns `None` when nothing needs to be said, which is the overwhelmingly common case.
+///
+/// Covers: RQ-OBS-009
+#[must_use]
+pub fn health_event(
+    state: &SessionState,
+    observed: Health,
+    window: &CounterSnapshot,
+) -> Option<Event> {
+    match state {
+        SessionState::Streaming { health, .. } => match observed {
+            // A speaker that has stopped fetching is not a quality problem, it is a lost peer,
+            // and the session already has a transition for that.
+            Health::Lost => Some(Event::PeerLost),
+            Health::Poor => Some(Event::HealthDropped(degrade_reason(window))),
+            Health::Good | Health::Fair if observed == *health => None,
+            observed => Some(Event::HealthChanged(observed)),
+        },
+        SessionState::Degraded { reason, .. } => match observed {
+            Health::Lost => Some(Event::PeerLost),
+            // Already degraded. Re-reporting the same thing would flap the state for
+            // subscribers without telling them anything new.
+            Health::Poor => (degrade_reason(window) != *reason)
+                .then(|| Event::HealthDropped(degrade_reason(window))),
+            Health::Good | Health::Fair => Some(Event::HealthRecovered),
+        },
+        // Health is only meaningful while audio is flowing.
+        _ => None,
+    }
+}
+
+/// Which kind of degradation the window describes.
+///
+/// Lost frames outrank underruns: an underrun is a gap the consumer filled with silence, while
+/// a drop is audio that existed and is gone. When both happened, the worse one is the honest
+/// thing to report.
+const fn degrade_reason(window: &CounterSnapshot) -> DegradeReason {
+    if window.quality_drops() > 0 { DegradeReason::FramesDropped } else { DegradeReason::Underrun }
 }
 
 #[cfg(test)]
@@ -691,6 +759,114 @@ mod tests {
 
         assert_eq!(first, second, "identical inputs produced different outputs");
         assert_eq!(second, third);
+    }
+
+    /// Covers: RQ-ENG-002
+    #[test]
+    fn rq_obs_009_health_maps_onto_exactly_one_event() {
+        let streaming = |health| SessionState::Streaming {
+            target: Box::new(device("Kitchen")),
+            url: url(),
+            health,
+            format: AudioFormat::WIRE_DEFAULT,
+        };
+        let degraded = |reason| SessionState::Degraded {
+            target: Box::new(device("Kitchen")),
+            url: url(),
+            format: AudioFormat::WIRE_DEFAULT,
+            reason,
+        };
+        let quiet = CounterSnapshot::default();
+        let losing = CounterSnapshot { dropped_ring: 12, ..CounterSnapshot::default() };
+
+        // Reporting what is already on screen would publish a state update every half second
+        // for the life of the session, and every subscriber would re-render for nothing.
+        assert_eq!(health_event(&streaming(Health::Good), Health::Good, &quiet), None);
+        assert_eq!(health_event(&streaming(Health::Fair), Health::Fair, &quiet), None);
+
+        assert_eq!(
+            health_event(&streaming(Health::Good), Health::Fair, &quiet),
+            Some(Event::HealthChanged(Health::Fair)),
+            "a shade of acceptable must not push the session into Degraded"
+        );
+
+        // The reason must follow the evidence: a drop is audio that existed and is gone, an
+        // underrun is a gap the consumer papered over.
+        assert_eq!(
+            health_event(&streaming(Health::Good), Health::Poor, &losing),
+            Some(Event::HealthDropped(DegradeReason::FramesDropped))
+        );
+        assert_eq!(
+            health_event(&streaming(Health::Good), Health::Poor, &quiet),
+            Some(Event::HealthDropped(DegradeReason::Underrun))
+        );
+
+        // Already degraded for the same reason: saying so again tells nobody anything.
+        assert_eq!(
+            health_event(&degraded(DegradeReason::FramesDropped), Health::Poor, &losing),
+            None
+        );
+        assert_eq!(
+            health_event(&degraded(DegradeReason::Underrun), Health::Poor, &losing),
+            Some(Event::HealthDropped(DegradeReason::FramesDropped)),
+            "a degradation that changes kind is worth reporting"
+        );
+        assert_eq!(
+            health_event(&degraded(DegradeReason::Underrun), Health::Good, &quiet),
+            Some(Event::HealthRecovered)
+        );
+
+        // A speaker that stopped fetching is a lost peer, not a quality grade.
+        assert_eq!(
+            health_event(&streaming(Health::Good), Health::Lost, &quiet),
+            Some(Event::PeerLost)
+        );
+
+        // And health means nothing when no audio is flowing.
+        assert_eq!(health_event(&SessionState::Idle, Health::Poor, &losing), None);
+        assert_eq!(health_event(&SessionState::Scanning, Health::Good, &quiet), None);
+    }
+
+    /// Covers: RQ-OBS-009
+    #[test]
+    fn rq_obs_009_the_watch_starts_once_and_only_once() {
+        // The bug this guards against: re-emitting `WatchHealth` on recovery would leave a
+        // second watch running after every blip, each one dispatching its own observations.
+        let history = drive_to_streaming();
+        let watches = history
+            .iter()
+            .flat_map(|t| &t.effects)
+            .filter(|effect| matches!(effect, Effect::WatchHealth))
+            .count();
+        assert_eq!(watches, 1, "entering Streaming must arm exactly one health watch");
+
+        let degraded = step(
+            history.last().unwrap().state.clone(),
+            Event::HealthDropped(DegradeReason::Underrun),
+        );
+        let recovered = step(degraded.state, Event::HealthRecovered);
+        assert!(
+            !recovered.effects.iter().any(|e| matches!(e, Effect::WatchHealth)),
+            "recovering must not start a second watch"
+        );
+    }
+
+    #[test]
+    fn an_unchanged_health_report_is_not_published_as_a_change() {
+        let streaming = SessionState::Streaming {
+            target: Box::new(device("Kitchen")),
+            url: url(),
+            health: Health::Fair,
+            format: AudioFormat::WIRE_DEFAULT,
+        };
+        let same = step(streaming.clone(), Event::HealthChanged(Health::Fair));
+        assert!(!same.changed, "an unchanged value must not wake every subscriber");
+        assert_eq!(same.state, streaming);
+
+        let different = step(streaming, Event::HealthChanged(Health::Good));
+        assert!(different.changed);
+        assert!(matches!(different.state, SessionState::Streaming { health: Health::Good, .. }));
+        assert!(different.effects.is_empty(), "relabelling must not touch the audio path");
     }
 
     /// Covers: RQ-ENG-002

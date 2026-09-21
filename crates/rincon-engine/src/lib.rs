@@ -19,7 +19,8 @@ pub mod machine;
 pub use backoff::Backoff;
 pub use driver::{Dependencies, Engine, EngineConfig};
 pub use machine::{
-    DegradeReason, Effect, Event, FailureReason, PrepareStep, SessionState, Transition, step,
+    DegradeReason, Effect, Event, FailureReason, PrepareStep, SessionState, Transition,
+    health_event, step,
 };
 
 #[cfg(test)]
@@ -40,6 +41,7 @@ mod tests {
 
     use rincon_audio::SyntheticCapture;
     use rincon_core::audio::{AudioFormat, SampleEncoding};
+    use rincon_core::metrics::Health;
     use rincon_testkit::{ControlCall, FakeControl, FakeDiscovery, device};
 
     use super::*;
@@ -85,6 +87,29 @@ mod tests {
                 }
             }
             false
+        })
+    }
+
+    /// Acts as a speaker that keeps listening, rather than fetching once and leaving.
+    ///
+    /// `play_the_speaker` issues a HEAD, which proves the peer can reach us but leaves no
+    /// connection open. A Sonos holds one GET for the life of the session, and the server only
+    /// counts a peer as active while it is draining — so anything measuring live quality needs
+    /// this shape of peer, not that one.
+    fn hold_the_stream_open(engine: &Arc<Engine>) -> tokio::task::JoinHandle<()> {
+        let mut states = engine.subscribe();
+        tokio::spawn(async move {
+            while let Ok(state) = states.recv().await {
+                if let SessionState::Preparing { url: Some(url), .. } = state {
+                    let Ok(client) = reqwest::Client::builder().build() else { return };
+                    let Ok(mut response) = client.get(url.as_str()).send().await else { return };
+                    // Keep draining. A peer that stops reading back-pressures the socket and
+                    // stops looking like a peer, which would make this a test of something
+                    // else. The stream is endless, so this ends when the server does.
+                    while let Ok(Some(_chunk)) = response.chunk().await {}
+                    return;
+                }
+            }
         })
     }
 
@@ -141,6 +166,66 @@ mod tests {
 
         engine.dispatch(Event::Disconnect).await;
         engine.dispatch(Event::TeardownComplete).await;
+    }
+
+    /// Covers: RQ-OBS-009
+    #[tokio::test]
+    async fn rq_obs_009_health_is_measured_rather_than_asserted() {
+        // Before this, `Streaming.health` was whatever the reducer wrote when the speaker
+        // connected -- always `Good` -- so the indicator was decorative and `Degraded` was
+        // unreachable outside the reducer's own unit tests. This drives a real session over a
+        // real socket and asserts the counters, not a literal, decide what it says.
+        let kitchen = loopback_device("Kitchen");
+        let engine =
+            engine(FakeDiscovery::finding(vec![kitchen.clone()]), FakeControl::accepting());
+
+        // A peer that stays, unlike `play_the_speaker`: health means nothing unless something
+        // is actually draining the stream.
+        let speaker = hold_the_stream_open(&engine);
+        engine.dispatch(Event::Connect(Box::new(kitchen))).await;
+        assert!(
+            matches!(engine.state(), SessionState::Streaming { health: Health::Good, .. }),
+            "expected a healthy Streaming state, got {:?}",
+            engine.state()
+        );
+
+        let counters = engine.counters().expect("a live session has counters");
+        assert_eq!(counters.snapshot().quality_drops(), 0, "nothing has gone wrong yet");
+
+        // Subscribe before causing the problem, so the transition cannot be missed.
+        let mut states = engine.subscribe();
+
+        // Let the watch take at least one sample first. Health is a *windowed delta*, so loss
+        // that predates every sample in the window is loss the window cannot see -- which is
+        // the correct behaviour, and the reason this wait is here rather than a sign of a race.
+        tokio::time::sleep(Duration::from_millis(700)).await;
+
+        // Lose audio while the speaker is listening. Nothing below dispatches an event: if the
+        // watch is not running, this times out, which is the entire point of the test.
+        counters.record_dropped(rincon_core::metrics::DropLayer::Socket, 4_800);
+
+        let degraded = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                match states.recv().await {
+                    Ok(SessionState::Degraded { reason, .. }) => return reason,
+                    Ok(_) => {}
+                    Err(error) => panic!("the state stream ended early: {error}"),
+                }
+            }
+        })
+        .await
+        .expect("health never reached the interface; the watch is not running");
+
+        assert_eq!(
+            degraded,
+            DegradeReason::FramesDropped,
+            "the reason must follow the evidence, not a default"
+        );
+
+        engine.dispatch(Event::Disconnect).await;
+        engine.dispatch(Event::TeardownComplete).await;
+        speaker.abort();
+        assert!(!engine.holds_resources());
     }
 
     /// Covers: RQ-ENG-010, RQ-SEC-007

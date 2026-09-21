@@ -25,6 +25,7 @@ use rincon_audio::{AudioCapture, SyntheticCapture};
 use rincon_control::{SoapControl, TransportControl, Volume};
 use rincon_core::audio::{AudioFormat, SampleEncoding};
 use rincon_core::device::Device;
+use rincon_core::metrics::CounterSnapshot;
 use rincon_core::telemetry::{self, TelemetryConfig};
 use rincon_discovery::{DeviceDiscovery, ScanConfig, SsdpDiscovery};
 use rincon_engine::{Dependencies, Engine, EngineConfig, Event, SessionState};
@@ -235,13 +236,7 @@ async fn stream(cli: &Cli, interface: Option<IpAddr>) -> Result<()> {
     tokio::signal::ctrl_c().await.context("cannot listen for Ctrl-C")?;
 
     let snapshot = counters.snapshot();
-    println!(
-        "\ncaptured {} frames, served {}, dropped {}, underruns {}",
-        snapshot.frames_captured,
-        snapshot.frames_served,
-        snapshot.dropped_total(),
-        snapshot.underruns
-    );
+    println!("\n{}", counter_summary(&snapshot));
     handle.shutdown().await;
     Ok(())
 }
@@ -318,15 +313,32 @@ async fn play(cli: &Cli, room: &str, volume: Option<u8>, seconds: Option<u64>) -
     engine.dispatch(Event::TeardownComplete).await;
 
     if let Some(snapshot) = summary {
-        println!(
-            "captured {} frames, served {}, dropped {}, underruns {}",
-            snapshot.frames_captured,
-            snapshot.frames_served,
-            snapshot.dropped_total(),
-            snapshot.underruns
-        );
+        println!("{}", counter_summary(&snapshot));
     }
     Ok(())
+}
+
+/// One line of counters, with the two kinds of loss kept apart.
+///
+/// Reporting a single `dropped` total was actively misleading: a session the operator heard
+/// perfectly reported 54% of frames dropped, because capture necessarily runs for several
+/// seconds before the speaker connects and everything captured in that window is discarded.
+/// Only the first figure means something went wrong.
+fn counter_summary(s: &CounterSnapshot) -> String {
+    let line = format!(
+        "captured {} frames, served {}, dropped {}, underruns {}",
+        s.frames_captured,
+        s.frames_served,
+        s.quality_drops(),
+        s.underruns
+    );
+    if s.dropped_no_consumer == 0 {
+        return line;
+    }
+    format!(
+        "{line}\n  (plus {} frames captured before the speaker connected, which is normal)",
+        s.dropped_no_consumer
+    )
 }
 
 /// Finds a room by name, case-insensitively, with a useful error when it is missing.

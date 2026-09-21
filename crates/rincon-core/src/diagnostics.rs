@@ -213,8 +213,12 @@ impl Bundle {
         );
         let _ = writeln!(
             out,
-            "  by layer: capture {} ring {} socket {} device {}",
-            c.dropped_capture, c.dropped_ring, c.dropped_socket, c.dropped_device
+            "  by layer: capture {} ring {} socket {} device {} (before-connect {})",
+            c.dropped_capture,
+            c.dropped_ring,
+            c.dropped_socket,
+            c.dropped_device,
+            c.dropped_no_consumer
         );
 
         let _ = writeln!(out, "log tail ({} lines):", self.log_tail.len());

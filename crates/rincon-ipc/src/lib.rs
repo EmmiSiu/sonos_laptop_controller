@@ -143,6 +143,13 @@ pub struct SessionDto {
     pub room: Option<String>,
     /// Counters for the live session.
     pub counters: CounterSnapshot,
+    /// Frames lost that a listener would have heard.
+    ///
+    /// Carried separately rather than left for the interface to add up. The interface used to
+    /// sum `dropped_ring + dropped_socket`, which quietly omitted capture and device loss, and
+    /// would have disagreed with the health indicator sitting next to it. One number, computed
+    /// once, in the language that owns the definition.
+    pub dropped_frames: u64,
     /// The latency note. Always present while connected, never behind a menu.
     ///
     /// Covers: RQ-UI-006
@@ -334,6 +341,7 @@ impl Api {
             state: state.name().to_lowercase(),
             detail: state,
             room,
+            dropped_frames: counters.quality_drops(),
             counters,
             latency_note,
         }

@@ -127,6 +127,13 @@ struct Shared {
     filled: ArrayQueue<Block>,
     free: ArrayQueue<Block>,
     device_lost: AtomicBool,
+    /// Set the first time the consumer reads.
+    ///
+    /// Before that, the ring is filling with audio nobody has asked for yet: capture must
+    /// start before the server can bind, and the speaker will not connect until it has been
+    /// handed a URL. Discarding that audio is expected, so it is attributed to
+    /// [`DropLayer::NoConsumer`] rather than counted against the session's quality.
+    consumer_started: AtomicBool,
     counters: Arc<SessionCounters>,
     format: AudioFormat,
 }
@@ -172,8 +179,14 @@ pub fn channel(
         let _ = free.push(Block::with_capacity(FRAMES_PER_BLOCK, channels));
     }
 
-    let shared =
-        Arc::new(Shared { filled, free, device_lost: AtomicBool::new(false), counters, format });
+    let shared = Arc::new(Shared {
+        filled,
+        free,
+        device_lost: AtomicBool::new(false),
+        consumer_started: AtomicBool::new(false),
+        counters,
+        format,
+    });
 
     (
         FrameSender { shared: Arc::clone(&shared), spare: None },
@@ -225,7 +238,12 @@ impl FrameSender {
         }
 
         if dropped_frames > 0 {
-            self.shared.counters.record_dropped(DropLayer::Ring, dropped_frames as u64);
+            let layer = if self.shared.consumer_started.load(Ordering::Acquire) {
+                DropLayer::Ring
+            } else {
+                DropLayer::NoConsumer
+            };
+            self.shared.counters.record_dropped(layer, dropped_frames as u64);
         }
         dropped_frames
     }
@@ -280,6 +298,10 @@ impl FrameReceiver {
         if channels == 0 || out.is_empty() {
             return Ok(0);
         }
+        // From here on, overrun means the consumer fell behind — a real quality problem —
+        // rather than "nothing was listening yet".
+        self.shared.consumer_started.store(true, Ordering::Release);
+
         // Only ever hand back whole frames, however small the caller's buffer is.
         let writable = out.len() - (out.len() % channels);
 
@@ -445,7 +467,9 @@ mod tests {
             tx.push(&payload);
         }
 
-        let dropped = counters.dropped_at(DropLayer::Ring);
+        // Nothing has read yet, so this overrun is "nobody was listening", not a defect.
+        assert_eq!(counters.dropped_at(DropLayer::Ring), 0);
+        let dropped = counters.dropped_at(DropLayer::NoConsumer);
         assert!(dropped > 0, "an overrun must be counted, not silently absorbed");
 
         // What survives must be the *newest* audio: the first value we read back cannot be
@@ -521,6 +545,36 @@ mod tests {
         let n = rx.read(&mut out).unwrap();
         assert_eq!(n, 256);
         assert_eq!(out, source, "interleaving was not preserved through the ring");
+    }
+
+    /// Covers: RQ-OBS-001
+    #[test]
+    fn overrun_before_the_first_read_is_not_blamed_on_the_consumer() {
+        // Measured on real hardware: a successful session discarded 54% of captured frames
+        // between capture starting and the speaker connecting. Attributing those to the ring
+        // made a perfect session look like it was dropping audio.
+        let counters = SessionCounters::new();
+        let (mut tx, mut rx) = channel(stereo_48k(), 1, Arc::clone(&counters));
+
+        for n in 0..12 {
+            tx.push(&vec![n as f32; FRAMES_PER_BLOCK * 2]);
+        }
+        assert!(counters.dropped_at(DropLayer::NoConsumer) > 0, "the loss must still be counted");
+        assert_eq!(counters.dropped_at(DropLayer::Ring), 0, "nobody was listening to lose it");
+        assert_eq!(counters.snapshot().quality_drops(), 0);
+
+        // Once the consumer starts reading, further overrun is its own fault and is blamed
+        // on the ring, because now it really is audio a listener lost.
+        let mut out = vec![0.0_f32; 16];
+        let _ = rx.read(&mut out);
+        for n in 0..12 {
+            tx.push(&vec![n as f32; FRAMES_PER_BLOCK * 2]);
+        }
+        assert!(
+            counters.dropped_at(DropLayer::Ring) > 0,
+            "overrun after the consumer started must count against quality"
+        );
+        assert!(counters.snapshot().quality_drops() > 0);
     }
 
     #[test]

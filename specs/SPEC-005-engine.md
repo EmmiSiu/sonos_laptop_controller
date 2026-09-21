@@ -97,17 +97,17 @@ pub struct Transition { pub state: SessionState, pub effects: Vec<Effect> }
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-ENG-001` | `step` MUST be pure: identical `(state, event)` inputs MUST produce identical outputs. | `property` | `crates/rincon-engine/src/machine.rs:406`<br>`crates/rincon-engine/src/machine.rs:681` |
-| `RQ-ENG-002` | Every `(state, event)` pair MUST be handled; an inapplicable event MUST leave the state unchanged and emit no effects. | `property` | `crates/rincon-engine/src/machine.rs:406`<br>`crates/rincon-engine/src/machine.rs:696` |
-| `RQ-ENG-003` | The preparation chain MUST run in the order: resolve coordinator → start capture → bind server → set URI → play. | `unit` | `crates/rincon-engine/src/machine.rs:406`<br>`crates/rincon-engine/src/machine.rs:719` |
-| `RQ-ENG-004` | The stream server MUST bind to the local address that reached the target during discovery, not to an arbitrary interface. | `unit` | `crates/rincon-engine/src/driver.rs:334`<br>`crates/rincon-engine/src/machine.rs:406`<br>`crates/rincon-engine/src/machine.rs:758` |
-| `RQ-ENG-005` | If the peer has not connected within 8 s of `Play`, the state MUST become `Failed(FirewallSuspected)`, which is retryable. | `unit` | `crates/rincon-engine/src/driver.rs:377`<br>`crates/rincon-engine/src/lib.rs:187`<br>`crates/rincon-engine/src/machine.rs:406`<br>`crates/rincon-engine/src/machine.rs:781` |
-| `RQ-ENG-006` | Leaving `Streaming` or `Degraded` by any path MUST emit teardown effects for both capture and server; no effect may be skipped on the error path. | `property` | `crates/rincon-engine/src/machine.rs:406`<br>`crates/rincon-engine/src/machine.rs:807` |
-| `RQ-ENG-007` | A transient underrun MUST move the session to `Degraded`, not `Failed`, and MUST auto-recover. | `unit` | `crates/rincon-engine/src/machine.rs:406`<br>`crates/rincon-engine/src/machine.rs:864` |
+| `RQ-ENG-001` | `step` MUST be pure: identical `(state, event)` inputs MUST produce identical outputs. | `property` | `crates/rincon-engine/src/machine.rs:417`<br>`crates/rincon-engine/src/machine.rs:749` |
+| `RQ-ENG-002` | Every `(state, event)` pair MUST be handled; an inapplicable event MUST leave the state unchanged and emit no effects. | `property` | `crates/rincon-engine/src/machine.rs:417`<br>`crates/rincon-engine/src/machine.rs:764`<br>`crates/rincon-engine/src/machine.rs:872` |
+| `RQ-ENG-003` | The preparation chain MUST run in the order: resolve coordinator → start capture → bind server → set URI → play. | `unit` | `crates/rincon-engine/src/machine.rs:417`<br>`crates/rincon-engine/src/machine.rs:895` |
+| `RQ-ENG-004` | The stream server MUST bind to the local address that reached the target during discovery, not to an arbitrary interface. | `unit` | `crates/rincon-engine/src/driver.rs:352`<br>`crates/rincon-engine/src/machine.rs:417`<br>`crates/rincon-engine/src/machine.rs:934` |
+| `RQ-ENG-005` | If the peer has not connected within 8 s of `Play`, the state MUST become `Failed(FirewallSuspected)`, which is retryable. | `unit` | `crates/rincon-engine/src/driver.rs:395`<br>`crates/rincon-engine/src/lib.rs:272`<br>`crates/rincon-engine/src/machine.rs:417`<br>`crates/rincon-engine/src/machine.rs:957` |
+| `RQ-ENG-006` | Leaving `Streaming` or `Degraded` by any path MUST emit teardown effects for both capture and server; no effect may be skipped on the error path. | `property` | `crates/rincon-engine/src/machine.rs:417`<br>`crates/rincon-engine/src/machine.rs:983` |
+| `RQ-ENG-007` | A transient underrun MUST move the session to `Degraded`, not `Failed`, and MUST auto-recover. | `unit` | `crates/rincon-engine/src/machine.rs:417`<br>`crates/rincon-engine/src/machine.rs:1040` |
 | `RQ-ENG-008` | Reconnection MUST use exponential backoff starting at 250 ms, capped at 8 s, with at most 6 attempts. | `unit` | `crates/rincon-engine/src/backoff.rs:45`<br>`crates/rincon-engine/src/backoff.rs:92` |
-| `RQ-ENG-009` | Every state transition MUST emit exactly one observable `StateChanged` event to subscribers. | `unit` | `crates/rincon-engine/src/driver.rs:136`<br>`crates/rincon-engine/src/driver.rs:204`<br>`crates/rincon-engine/src/lib.rs:214` |
-| `RQ-ENG-010` | A full connect → stream → disconnect cycle MUST leave zero live tasks, sockets, or capture streams. | `integration` | `crates/rincon-engine/src/driver.rs:204`<br>`crates/rincon-engine/src/lib.rs:146` |
-| `RQ-ENG-011` | The driver MUST be usable with fake implementations of every trait, so the whole engine is testable without hardware. | `integration` | `crates/rincon-engine/src/lib.rs:100` |
+| `RQ-ENG-009` | Every state transition MUST emit exactly one observable `StateChanged` event to subscribers. | `unit` | `crates/rincon-engine/src/driver.rs:150`<br>`crates/rincon-engine/src/driver.rs:218`<br>`crates/rincon-engine/src/lib.rs:299` |
+| `RQ-ENG-010` | A full connect → stream → disconnect cycle MUST leave zero live tasks, sockets, or capture streams. | `integration` | `crates/rincon-engine/src/driver.rs:218`<br>`crates/rincon-engine/src/lib.rs:231` |
+| `RQ-ENG-011` | The driver MUST be usable with fake implementations of every trait, so the whole engine is testable without hardware. | `integration` | `crates/rincon-engine/src/lib.rs:125` |
 
 ## 7. Failure taxonomy
 

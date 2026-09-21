@@ -7,6 +7,21 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The health indicator is measured rather than asserted.** `Streaming.health` was whatever the
+  reducer wrote when the speaker connected — always `Good` — so `RQ-OBS-009` was satisfied by a
+  pure function nothing called, and `Degraded` was unreachable outside the tests. The engine now
+  samples the counters every 500 ms over a rolling two-second window and reports what they say.
+- **Frames discarded before the speaker connects no longer count as lost audio.** On real
+  hardware a session the operator heard perfectly reported 54% of frames dropped: capture
+  necessarily runs for several seconds before anything fetches the stream, and the ring
+  correctly discards that audio. It now has its own layer (`no-consumer`), is still counted and
+  still appears in the diagnostics bundle, and is excluded from the health model.
+- **The interface no longer computes its own, different, drop total.** It summed
+  `dropped_ring + dropped_socket`, silently omitting capture and device loss, which would have
+  disagreed with the health indicator beside it. The number now comes from one place.
+
 ### Added
 
 - Spec suite (`SPEC-000` … `SPEC-008`) with numbered requirements that CI checks for test

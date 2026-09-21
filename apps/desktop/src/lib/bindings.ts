@@ -75,6 +75,8 @@ export interface CounterSnapshot {
   dropped_ring: number;
   dropped_socket: number;
   dropped_device: number;
+  /** Discarded before the speaker connected. Expected; not a quality signal. */
+  dropped_no_consumer: number;
 }
 
 /** Everything the interface needs to render one frame of the session. */
@@ -83,6 +85,8 @@ export interface SessionDto {
   detail: SessionState;
   room: string | null;
   counters: CounterSnapshot;
+  /** Frames a listener would have heard and did not. Excludes the pre-connection window. */
+  droppedFrames: number;
   /** Present whenever audio is flowing. Never hide this. */
   latencyNote: string | null;
 }

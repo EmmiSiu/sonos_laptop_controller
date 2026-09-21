@@ -55,14 +55,14 @@ The frontend never polls.
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-UI-001` | Commands MUST accept a device **identifier**, never a raw address; the Rust side resolves it against known devices. | `unit` | `crates/rincon-ipc/src/lib.rs:277`<br>`crates/rincon-ipc/src/lib.rs:454` |
-| `RQ-UI-002` | An unknown device id MUST return a typed `IpcError::UnknownDevice`, never panic and never 500. | `unit` | `crates/rincon-ipc/src/lib.rs:82`<br>`crates/rincon-ipc/src/lib.rs:277`<br>`crates/rincon-ipc/src/lib.rs:474` |
-| `RQ-UI-003` | Every IPC error MUST serialise as `{ code, message, retryable }` with a stable `code`. | `unit` | `crates/rincon-core/src/stream_url.rs:82`<br>`crates/rincon-ipc/src/lib.rs:40`<br>`crates/rincon-ipc/src/lib.rs:491` |
+| `RQ-UI-001` | Commands MUST accept a device **identifier**, never a raw address; the Rust side resolves it against known devices. | `unit` | `crates/rincon-ipc/src/lib.rs:284`<br>`crates/rincon-ipc/src/lib.rs:462` |
+| `RQ-UI-002` | An unknown device id MUST return a typed `IpcError::UnknownDevice`, never panic and never 500. | `unit` | `crates/rincon-ipc/src/lib.rs:82`<br>`crates/rincon-ipc/src/lib.rs:284`<br>`crates/rincon-ipc/src/lib.rs:482` |
+| `RQ-UI-003` | Every IPC error MUST serialise as `{ code, message, retryable }` with a stable `code`. | `unit` | `crates/rincon-core/src/stream_url.rs:82`<br>`crates/rincon-ipc/src/lib.rs:40`<br>`crates/rincon-ipc/src/lib.rs:499` |
 | `RQ-UI-004` | The Tauri CSP MUST forbid `unsafe-inline`, `unsafe-eval`, and any remote origin. | `unit` | `apps/desktop/src/lib/guards.spec.ts:56`<br>`scripts/spec-guard.mjs:124` |
 | `RQ-UI-005` | The frontend MUST NOT use `v-html`, `innerHTML`, or `eval` anywhere. | `unit` | `apps/desktop/src/lib/guards.spec.ts:29` |
-| `RQ-UI-006` | The latency characteristic MUST be visible in the connected state, not hidden behind a menu. | `manual` | `crates/rincon-ipc/src/lib.rs:148`<br>`crates/rincon-ipc/src/lib.rs:330`<br>`crates/rincon-ipc/src/lib.rs:556`<br>`docs/manual-test-log.md:18` |
-| `RQ-UI-007` | On `FirewallSuspected`, the UI MUST show the exact remediation command and MUST NOT silently execute a privileged action. | `unit` | `crates/rincon-ipc/src/lib.rs:195`<br>`crates/rincon-ipc/src/lib.rs:348`<br>`crates/rincon-ipc/src/lib.rs:513` |
-| `RQ-UI-008` | TypeScript bindings MUST be generated from the Rust DTOs; a mismatch MUST fail the frontend build. | `integration` | `crates/rincon-ipc/src/bindings.rs:161`<br>`.github/workflows/ci.yml:108` |
+| `RQ-UI-006` | The latency characteristic MUST be visible in the connected state, not hidden behind a menu. | `manual` | `crates/rincon-ipc/src/lib.rs:155`<br>`crates/rincon-ipc/src/lib.rs:337`<br>`crates/rincon-ipc/src/lib.rs:564`<br>`docs/manual-test-log.md:18` |
+| `RQ-UI-007` | On `FirewallSuspected`, the UI MUST show the exact remediation command and MUST NOT silently execute a privileged action. | `unit` | `crates/rincon-ipc/src/lib.rs:202`<br>`crates/rincon-ipc/src/lib.rs:356`<br>`crates/rincon-ipc/src/lib.rs:521` |
+| `RQ-UI-008` | TypeScript bindings MUST be generated from the Rust DTOs; a mismatch MUST fail the frontend build. | `integration` | `crates/rincon-ipc/src/bindings.rs:165`<br>`.github/workflows/ci.yml:108` |
 | `RQ-UI-009` | The window MUST remain interactive during a scan; no command may block the UI thread. | `manual` | `docs/manual-test-log.md:33` |
 | `RQ-UI-010` | `withGlobalTauri` MUST be `false`, and the app MUST enable only the capabilities it uses. | `unit` | `scripts/spec-guard.mjs:124` |
 | `RQ-UI-011` | Displayed device text MUST be rendered as text, and MUST be truncated at 64 characters. | `unit` | `crates/rincon-core/src/device.rs:102`<br>`crates/rincon-core/src/device.rs:222`<br>`apps/desktop/src/lib/sanitize.spec.ts:6`<br>`apps/desktop/src/lib/sanitize.spec.ts:20` |

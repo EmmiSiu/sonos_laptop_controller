@@ -38,7 +38,7 @@ const counters = computed(() => props.session.counters);
 
 /** Twelve bars driven by the drop counters, so the meter reflects something real. */
 const bars = computed(() => {
-  const dropped = counters.value.dropped_ring + counters.value.dropped_socket;
+  const dropped = props.session.droppedFrames;
   const served = Math.max(1, counters.value.frames_served);
   const quality = Math.max(0, 1 - dropped / served);
   return Array.from({ length: 12 }, (_, index) => ({
@@ -106,7 +106,7 @@ function onVolume(event: Event): void {
       <div class="rounded-lg bg-ink-800/50 py-2">
         <dt class="text-[10px] uppercase tracking-wider text-slate-600">Dropped</dt>
         <dd class="font-mono text-xs text-slate-300">
-          {{ counters.dropped_ring + counters.dropped_socket }}
+          {{ session.droppedFrames }}
         </dd>
       </div>
       <div class="rounded-lg bg-ink-800/50 py-2">

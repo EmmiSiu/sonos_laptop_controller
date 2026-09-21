@@ -34,6 +34,20 @@ use crate::machine::{Effect, Event, FailureReason, SessionState, step};
 /// How often the peer-connection watch polls while waiting.
 const PEER_POLL: Duration = Duration::from_millis(50);
 
+/// How often health is recomputed while a session is live.
+///
+/// `RQ-OBS-009` requires the indicator to reflect a degradation within 500 ms of it being
+/// counted, so this is a ceiling, not a preference.
+const HEALTH_POLL: Duration = Duration::from_millis(500);
+
+/// How many polls each evaluation looks back over.
+///
+/// Evaluating a single interval would satisfy the requirement and produce an unreadable
+/// indicator: one lost frame would turn it amber for exactly 500 ms and then back, which reads
+/// as a flicker rather than as information. Four intervals — two seconds — is long enough for a
+/// real problem to stay visible and short enough that recovery is not delayed past noticing.
+const HEALTH_WINDOW: usize = 4;
+
 /// Capacity of the state broadcast. Small: subscribers render the latest state, and a slow one
 /// lagging is better than an unbounded queue of stale states.
 const BROADCAST_DEPTH: usize = 32;
@@ -240,6 +254,10 @@ impl Engine {
             Effect::SetUri { target, url } => Some(self.do_set_uri(*target, url).await),
             Effect::Play(target) => Some(self.do_play(*target).await),
             Effect::ArmPeerTimeout => Some(self.do_await_peer().await),
+            Effect::WatchHealth => {
+                self.spawn_health_watch();
+                None
+            }
             Effect::StopPlayback(target) => {
                 // A speaker that has already gone away cannot be told to stop, and that is not
                 // a failure worth surfacing: we are tearing down either way.
@@ -395,6 +413,85 @@ impl Engine {
             }
             tokio::time::sleep(PEER_POLL).await;
         }
+    }
+
+    /// Whether the speaker is fetching the stream **right now**.
+    ///
+    /// Deliberately not [`ServerHandle::peer_connected`], which is a latch meaning "has ever
+    /// connected". That is the right signal for deciding whether a firewall ate the first
+    /// connection, and the wrong one for health: once it is set it never clears, so a health
+    /// model fed from it can never observe a peer going away.
+    fn peer_streaming_now(&self) -> bool {
+        self.live
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .server
+            .as_ref()
+            .is_some_and(|server| server.active_connections() > 0)
+    }
+
+    /// Samples the counters for as long as the session is live and reports what they say.
+    ///
+    /// # Why this exists
+    ///
+    /// Without it, `health` was whatever the reducer wrote when the speaker connected — always
+    /// `Health::Good` — so `RQ-OBS-009` was satisfied by a pure function that nothing ever
+    /// called, and `Degraded` was unreachable outside the tests. An indicator that cannot
+    /// change is worse than no indicator: it is a claim the product cannot support.
+    ///
+    /// The task holds a [`Weak`](std::sync::Weak) reference, so it cannot keep an otherwise
+    /// dropped engine alive, and it returns as soon as the session stops being live rather
+    /// than needing a cancellation handle.
+    ///
+    /// Covers: RQ-OBS-009
+    fn spawn_health_watch(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            let mut history: VecDeque<rincon_core::metrics::CounterSnapshot> =
+                VecDeque::with_capacity(HEALTH_WINDOW + 1);
+
+            loop {
+                tokio::time::sleep(HEALTH_POLL).await;
+
+                let Some(engine) = weak.upgrade() else { return };
+                let state = engine.state();
+                if !state.is_live() {
+                    debug!("session is no longer live; health watch finished");
+                    return;
+                }
+                let Some(counters) = engine.counters() else { return };
+
+                // Nothing is fetching the stream at this instant. SPEC-002 requires a session
+                // to survive the speaker disconnecting and reconnecting, so this is not a
+                // failure — but it is also not a measurement. Everything the ring discards
+                // while nobody is listening is attributed to `DropLayer::NoConsumer` and would
+                // not count anyway; clearing the history keeps the gap out of the window that
+                // follows, so the indicator does not blame the reconnect for the silence.
+                if !engine.peer_streaming_now() {
+                    history.clear();
+                    continue;
+                }
+
+                history.push_back(counters.snapshot());
+                while history.len() > HEALTH_WINDOW + 1 {
+                    history.pop_front();
+                }
+                // `push_back` guarantees a back; a front exists because the same push did.
+                let (Some(newest), Some(oldest)) = (history.back(), history.front()) else {
+                    continue;
+                };
+
+                // `peer_connected: true` is not an assumption: the guard above returned early
+                // unless a connection is active at this instant.
+                let window = newest.since(oldest);
+                let observed = rincon_core::metrics::Health::evaluate(&window, true);
+
+                // The decision of what that means for the session belongs to the reducer.
+                if let Some(event) = crate::machine::health_event(&state, observed, &window) {
+                    engine.dispatch(event).await;
+                }
+            }
+        });
     }
 }
 

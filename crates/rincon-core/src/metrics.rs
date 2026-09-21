@@ -28,11 +28,22 @@ pub enum DropLayer {
     Socket,
     /// The speaker disconnected or stalled.
     Device,
+    /// Discarded because nothing was listening yet.
+    ///
+    /// Capture starts several seconds before the speaker fetches the stream — it has to, since
+    /// the server needs a source before it can bind, and the speaker will not connect until it
+    /// has been handed a URL. Everything captured in that gap was never going to be served.
+    ///
+    /// It is counted, because silent loss is a defect and a diagnostics bundle should show it.
+    /// It is a *separate* layer, because it is not a quality problem, and a health indicator
+    /// that turns amber on every successful session is an indicator nobody reads.
+    NoConsumer,
 }
 
 impl DropLayer {
     /// Every layer, for exhaustive reporting.
-    pub const ALL: [Self; 4] = [Self::Capture, Self::Ring, Self::Socket, Self::Device];
+    pub const ALL: [Self; 5] =
+        [Self::Capture, Self::Ring, Self::Socket, Self::Device, Self::NoConsumer];
 
     /// A short label for logs and the diagnostics bundle.
     #[must_use]
@@ -42,7 +53,16 @@ impl DropLayer {
             Self::Ring => "ring",
             Self::Socket => "socket",
             Self::Device => "device",
+            Self::NoConsumer => "no-consumer",
         }
+    }
+
+    /// Whether loss at this layer says anything about the quality of the audio a listener got.
+    ///
+    /// The health model is built from these only. See [`Health::evaluate`].
+    #[must_use]
+    pub const fn affects_quality(self) -> bool {
+        !matches!(self, Self::NoConsumer)
     }
 }
 
@@ -62,7 +82,7 @@ pub struct SessionCounters {
     frames_served: AtomicU64,
     underruns: AtomicU64,
     reconnects: AtomicU64,
-    dropped: [AtomicU64; 4],
+    dropped: [AtomicU64; 5],
 }
 
 impl SessionCounters {
@@ -86,15 +106,9 @@ impl SessionCounters {
     ///
     /// Covers: RQ-OBS-001
     pub fn record_dropped(&self, layer: DropLayer, n: u64) {
-        let slot = match layer {
-            DropLayer::Capture => 0,
-            DropLayer::Ring => 1,
-            DropLayer::Socket => 2,
-            DropLayer::Device => 3,
-        };
         // Indexing a fixed-size array with a value derived from a closed enum: the bound is
-        // proven by the match above, which is why `get` would only add noise here.
-        if let Some(counter) = self.dropped.get(slot) {
+        // proven by the match, which is why `get` would only add noise here.
+        if let Some(counter) = self.dropped.get(slot_of(layer)) {
             counter.fetch_add(n, Ordering::Relaxed);
         }
     }
@@ -136,13 +150,7 @@ impl SessionCounters {
     /// Frames dropped at a specific layer.
     #[must_use]
     pub fn dropped_at(&self, layer: DropLayer) -> u64 {
-        let slot = match layer {
-            DropLayer::Capture => 0,
-            DropLayer::Ring => 1,
-            DropLayer::Socket => 2,
-            DropLayer::Device => 3,
-        };
-        self.dropped.get(slot).map_or(0, |c| c.load(Ordering::Relaxed))
+        self.dropped.get(slot_of(layer)).map_or(0, |c| c.load(Ordering::Relaxed))
     }
 
     /// Total frames dropped across every layer.
@@ -163,7 +171,19 @@ impl SessionCounters {
             dropped_ring: self.dropped_at(DropLayer::Ring),
             dropped_socket: self.dropped_at(DropLayer::Socket),
             dropped_device: self.dropped_at(DropLayer::Device),
+            dropped_no_consumer: self.dropped_at(DropLayer::NoConsumer),
         }
+    }
+}
+
+/// The counter slot for a layer. One `match`, so the two accessors cannot disagree.
+const fn slot_of(layer: DropLayer) -> usize {
+    match layer {
+        DropLayer::Capture => 0,
+        DropLayer::Ring => 1,
+        DropLayer::Socket => 2,
+        DropLayer::Device => 3,
+        DropLayer::NoConsumer => 4,
     }
 }
 
@@ -186,12 +206,26 @@ pub struct CounterSnapshot {
     pub dropped_socket: u64,
     /// Frames lost because the device went away.
     pub dropped_device: u64,
+    /// Frames discarded before anything was listening. Not a quality problem.
+    pub dropped_no_consumer: u64,
 }
 
 impl CounterSnapshot {
-    /// Total frames lost across every layer.
+    /// Total frames lost across every layer, including the ones nobody was waiting for.
+    ///
+    /// This is the number a diagnostics bundle reports, because it is what happened.
     #[must_use]
     pub const fn dropped_total(&self) -> u64 {
+        self.quality_drops() + self.dropped_no_consumer
+    }
+
+    /// Frames lost that a listener would have heard.
+    ///
+    /// This is the number the health model uses. The difference matters: a perfectly healthy
+    /// session discards several seconds of audio between capture starting and the speaker
+    /// connecting, and counting that as a defect would leave the indicator permanently amber.
+    #[must_use]
+    pub const fn quality_drops(&self) -> u64 {
         self.dropped_capture + self.dropped_ring + self.dropped_socket + self.dropped_device
     }
 
@@ -207,6 +241,9 @@ impl CounterSnapshot {
             dropped_ring: self.dropped_ring.saturating_sub(earlier.dropped_ring),
             dropped_socket: self.dropped_socket.saturating_sub(earlier.dropped_socket),
             dropped_device: self.dropped_device.saturating_sub(earlier.dropped_device),
+            dropped_no_consumer: self
+                .dropped_no_consumer
+                .saturating_sub(earlier.dropped_no_consumer),
         }
     }
 }
@@ -231,13 +268,17 @@ impl Health {
     /// Written as a pure function of the delta so the indicator can never disagree with what
     /// was actually measured, and so the thresholds are unit-testable.
     ///
+    /// Uses [`CounterSnapshot::quality_drops`] rather than the total: frames discarded before
+    /// anything was listening are not a defect, and treating them as one would make every
+    /// healthy session look degraded.
+    ///
     /// Covers: RQ-OBS-009
     #[must_use]
     pub const fn evaluate(window: &CounterSnapshot, peer_connected: bool) -> Self {
         if !peer_connected {
             return Self::Lost;
         }
-        if window.dropped_total() > 0 || window.underruns > 3 {
+        if window.quality_drops() > 0 || window.underruns > 3 {
             return Self::Poor;
         }
         if window.underruns > 0 { Self::Fair } else { Self::Good }
@@ -289,6 +330,14 @@ mod tests {
         assert_eq!(c.dropped_at(DropLayer::Capture), 0, "untouched layers stay zero");
         assert_eq!(c.dropped_at(DropLayer::Device), 0);
         assert_eq!(c.dropped_total(), 137);
+
+        // Frames nobody was waiting for are counted, but kept out of the quality figure.
+        let session = SessionCounters::new();
+        session.record_dropped(DropLayer::NoConsumer, 500_000);
+        session.record_dropped(DropLayer::Ring, 3);
+        let snapshot = session.snapshot();
+        assert_eq!(snapshot.dropped_total(), 500_003, "diagnostics report what happened");
+        assert_eq!(snapshot.quality_drops(), 3, "health counts only what a listener lost");
 
         // Every layer must be individually addressable; a merged counter would fail this.
         for layer in DropLayer::ALL {
@@ -353,11 +402,39 @@ mod tests {
         assert_eq!(Health::evaluate(&many_blips, true), Health::Poor, "4 underruns is poor");
 
         let losing = CounterSnapshot { dropped_ring: 1, ..clean };
-        assert_eq!(Health::evaluate(&losing, true), Health::Poor, "any loss is poor");
+        assert_eq!(Health::evaluate(&losing, true), Health::Poor, "any real loss is poor");
+
+        // The regression this pins down was measured on real hardware: a successful session
+        // discarded 54% of captured frames while waiting for the speaker to connect. Counting
+        // those would have shown "Poor" for a session the listener heard perfectly.
+        let waiting = CounterSnapshot { dropped_no_consumer: 313_920, ..clean };
+        assert_eq!(
+            Health::evaluate(&waiting, true),
+            Health::Good,
+            "frames discarded before anyone was listening are not a quality problem"
+        );
 
         // Disconnection dominates everything else.
         assert_eq!(Health::evaluate(&clean, false), Health::Lost);
         assert_eq!(Health::evaluate(&losing, false), Health::Lost);
+    }
+
+    #[test]
+    fn every_layer_that_affects_quality_is_part_of_the_quality_sum() {
+        // `quality_drops` is a hand-written sum over named fields. Adding a variant to
+        // `DropLayer` without adding it there would silently exclude real loss from the health
+        // model, and every existing test would still pass. This makes the two disagree loudly.
+        for layer in DropLayer::ALL {
+            let c = SessionCounters::new();
+            c.record_dropped(layer, 1);
+            let snapshot = c.snapshot();
+            assert_eq!(snapshot.dropped_total(), 1, "{layer} is missing from dropped_total()");
+            assert_eq!(
+                snapshot.quality_drops() == 1,
+                layer.affects_quality(),
+                "{layer} disagrees with its own affects_quality()"
+            );
+        }
     }
 
     #[test]
