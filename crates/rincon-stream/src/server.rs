@@ -36,7 +36,6 @@ use axum::{Router, body::Body};
 use bytes::{Bytes, BytesMut};
 use rincon_audio::convert;
 use rincon_audio::ring::{FrameReceiver, RingError};
-use rincon_core::audio::AudioFormat;
 use rincon_core::metrics::{DropLayer, SessionCounters};
 use rincon_core::stream_url::StreamUrl;
 use tokio::net::TcpListener;
@@ -58,6 +57,12 @@ const DRAIN_MS: u32 = 30;
 /// Buffered chunks between the serving task and the socket. Small: this is not where audio
 /// should queue up, the ring is.
 const CHANNEL_DEPTH: usize = 8;
+
+/// How long a graceful shutdown may take before the listener is closed regardless.
+///
+/// The response in flight is an endless stream, so "wait for the connection to finish" is a
+/// promise the speaker has no reason to keep.
+const SHUTDOWN_GRACE: Duration = Duration::from_millis(750);
 
 /// Why the server could not start.
 #[derive(Debug, thiserror::Error)]
@@ -131,13 +136,24 @@ impl Handle {
         Arc::clone(&self.state.counters)
     }
 
-    /// Stops the server and waits for it to finish.
+    /// Stops the server.
+    ///
+    /// Asks for a graceful shutdown first, then forces one after [`SHUTDOWN_GRACE`].
+    ///
+    /// The forced step is not belt-and-braces, it is the normal case: an in-flight response
+    /// here is an *endless* audio stream, so a purely graceful shutdown waits for a speaker to
+    /// decide to hang up, which it has no reason to do. Without the deadline, clicking Stop
+    /// would hang the interface until the speaker gave up on its own.
     pub async fn shutdown(mut self) {
         if let Some(signal) = self.shutdown.take() {
             let _ = signal.send(());
         }
-        if let Some(task) = self.task.take() {
-            let _ = task.await;
+        if let Some(mut task) = self.task.take() {
+            if tokio::time::timeout(SHUTDOWN_GRACE, &mut task).await.is_err() {
+                debug!("graceful shutdown timed out; forcing the listener closed");
+                task.abort();
+                let _ = task.await;
+            }
         }
     }
 }
@@ -170,7 +186,8 @@ pub async fn bind(
 ) -> Result<Handle, StreamError> {
     config.validate()?;
 
-    let token = SessionToken::generate().map_err(|source| StreamError::Entropy(source.to_string()))?;
+    let token =
+        SessionToken::generate().map_err(|source| StreamError::Entropy(source.to_string()))?;
 
     let listener = TcpListener::bind(config.bind)
         .await
@@ -191,6 +208,11 @@ pub async fn bind(
 
     // Exactly one route. Everything else -- `/`, `/..`, `/admin`, a traversal attempt -- hits
     // the fallback, which is a bare 404 with no body to learn anything from.
+    // `{token}` here is an axum path parameter, not a format placeholder.
+    #[expect(
+        clippy::literal_string_with_formatting_args,
+        reason = "axum path syntax collides with format-string syntax"
+    )]
     let app = Router::new()
         .route("/s/{token}/stream.wav", get(stream).head(stream))
         .fallback(|| async { StatusCode::NOT_FOUND })
@@ -198,13 +220,10 @@ pub async fn bind(
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let task = tokio::spawn(async move {
-        let served = axum::serve(
-            listener,
-            app.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .with_graceful_shutdown(async move {
-            let _ = shutdown_rx.await;
-        });
+        let served = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+            .with_graceful_shutdown(async move {
+                let _ = shutdown_rx.await;
+            });
         if let Err(error) = served.await {
             warn!(%error, "stream server stopped");
         }
@@ -276,11 +295,11 @@ async fn stream(
     }
 
     // Covers: RQ-STRM-009
-    let taken = {
+    let leased = {
         let mut source = state.source.lock().unwrap_or_else(PoisonError::into_inner);
         source.take()
     };
-    let Some(receiver) = taken else {
+    let Some(receiver) = leased else {
         // A previous connection still holds the consumer; it will be returned when that task
         // notices the socket is gone. Asking again shortly is the right answer.
         debug!("audio source is still leased to a previous connection");
@@ -296,7 +315,7 @@ async fn stream(
 /// Response headers. Identical for `GET` and `HEAD`, by construction rather than by copy.
 ///
 /// Covers: RQ-STRM-013
-fn headers(framing: Framing) -> [(header::HeaderName, HeaderValue); 5] {
+const fn headers(framing: Framing) -> [(header::HeaderName, HeaderValue); 5] {
     // Both framings carry a WAV header, so the media type is the same; the difference is
     // whether a length is declared, which hyper decides from the body.
     let content_type = match framing {

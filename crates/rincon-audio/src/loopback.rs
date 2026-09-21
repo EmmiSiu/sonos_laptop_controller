@@ -124,12 +124,7 @@ impl AudioCapture for LoopbackCapture {
         }
 
         debug!(%format, "loopback capture started");
-        Ok(CaptureSession::new(
-            format,
-            rx,
-            counters,
-            LoopbackGuard { stop, handle: Some(handle) },
-        ))
+        Ok(CaptureSession::new(format, rx, counters, LoopbackGuard { stop, handle: Some(handle) }))
     }
 }
 
@@ -175,9 +170,8 @@ fn run_capture(
     ) {
         Ok(format) => format,
         Err(source) => {
-            let _ = start_tx.send(Err(CaptureError::UnsupportedFormat {
-                detail: source.to_string(),
-            }));
+            let _ =
+                start_tx.send(Err(CaptureError::UnsupportedFormat { detail: source.to_string() }));
             return;
         }
     };

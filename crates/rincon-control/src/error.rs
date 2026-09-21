@@ -116,12 +116,20 @@ impl ControlError {
     pub const fn remediation(&self) -> &'static str {
         match self {
             Self::TransitionNotAvailable => "Stop what the speaker is playing, then try again.",
-            Self::FormatRejected => "This speaker refused the audio format. Report this with a diagnostics bundle.",
-            Self::StreamUnreachable => "The speaker could not reach your computer. Check the Windows Firewall rule.",
+            Self::FormatRejected => {
+                "This speaker refused the audio format. Report this with a diagnostics bundle."
+            }
+            Self::StreamUnreachable => {
+                "The speaker could not reach your computer. Check the Windows Firewall rule."
+            }
             Self::UnsupportedAction => "This device does not support being streamed to.",
-            Self::Upnp { .. } => "The speaker refused the command. Try again, or restart the speaker.",
+            Self::Upnp { .. } => {
+                "The speaker refused the command. Try again, or restart the speaker."
+            }
             Self::Unreachable { .. } => "The speaker is not responding. Rescan the network.",
-            Self::BadResponse(_) | Self::MissingValue(_) => "The speaker sent something unexpected. Report this with a diagnostics bundle.",
+            Self::BadResponse(_) | Self::MissingValue(_) => {
+                "The speaker sent something unexpected. Report this with a diagnostics bundle."
+            }
             Self::Refused(_) => "That address is not on your local network.",
         }
     }
@@ -230,7 +238,10 @@ mod tests {
     fn retry_classification_matches_what_can_actually_change() {
         assert!(ControlError::TransitionNotAvailable.retryable(), "the user can stop Spotify");
         assert!(ControlError::Unreachable { detail: String::new() }.retryable());
-        assert!(!ControlError::UnsupportedAction.retryable(), "a printer will not become a speaker");
+        assert!(
+            !ControlError::UnsupportedAction.retryable(),
+            "a printer will not become a speaker"
+        );
         assert!(!ControlError::BadResponse(String::new()).retryable());
     }
 

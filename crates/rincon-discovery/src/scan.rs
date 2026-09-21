@@ -294,10 +294,8 @@ async fn resolve_one(
     })?;
 
     // The SSRF guard. Nothing is dialled before this returns Ok.
-    let address = net::validate_device_url(&url).map_err(|source| UnresolvedDevice {
-        reason: source.to_string(),
-        ..fallback.clone()
-    })?;
+    let address = net::validate_device_url(&url)
+        .map_err(|source| UnresolvedDevice { reason: source.to_string(), ..fallback.clone() })?;
 
     let body = crate::fetch::get_bounded(client, url.clone(), limits::Budget::DESCRIPTION)
         .await
@@ -361,7 +359,8 @@ mod tests {
         // the full window. It must still return inside window + slack.
         let config = ScanConfig { window: Duration::from_millis(300), ..Default::default() };
         let started = Instant::now();
-        let outcome = scan(config).await.expect("a scan with no devices is a success, not an error");
+        let outcome =
+            scan(config).await.expect("a scan with no devices is a success, not an error");
         let elapsed = started.elapsed();
 
         assert!(outcome.is_empty() || !outcome.devices.is_empty());
@@ -383,9 +382,8 @@ mod tests {
             server: None,
         };
 
-        for (index, location) in ["http://192.168.1.45:1400/x", "http://10.0.0.9:1400/x"]
-            .into_iter()
-            .enumerate()
+        for (index, location) in
+            ["http://192.168.1.45:1400/x", "http://10.0.0.9:1400/x"].into_iter().enumerate()
         {
             let response = make(location);
             let iface = Ipv4Addr::new(192, 168, 1, 20 + index as u8);

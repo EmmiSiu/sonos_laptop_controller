@@ -87,11 +87,34 @@ impl SessionToken {
 /// Lowercase hex, written out rather than pulled from a crate: sixteen bytes do not justify a
 /// dependency, and the implementation is one line that a reviewer can check by eye.
 fn hex(bytes: &[u8]) -> String {
-    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    /// One hex digit. The `& 0x0f` at the call sites bounds the input to `0..=15`, so the
+    /// lookup is total -- but it is written as a `match` rather than an index so that the
+    /// compiler, not a comment, is what guarantees it.
+    const fn digit(nibble: u8) -> char {
+        match nibble & 0x0f {
+            0 => '0',
+            1 => '1',
+            2 => '2',
+            3 => '3',
+            4 => '4',
+            5 => '5',
+            6 => '6',
+            7 => '7',
+            8 => '8',
+            9 => '9',
+            10 => 'a',
+            11 => 'b',
+            12 => 'c',
+            13 => 'd',
+            14 => 'e',
+            _ => 'f',
+        }
+    }
+
     let mut out = String::with_capacity(bytes.len() * 2);
     for &byte in bytes {
-        out.push(char::from(DIGITS[usize::from(byte >> 4)]));
-        out.push(char::from(DIGITS[usize::from(byte & 0x0f)]));
+        out.push(digit(byte >> 4));
+        out.push(digit(byte));
     }
     out
 }
@@ -148,9 +171,8 @@ mod tests {
 
         // And the bits are spread: every hex digit should appear across the sample. A broken
         // source that only ever emitted, say, ASCII digits would pass the checks above.
-        let corpus: String = (0..200)
-            .map(|_| SessionToken::generate().unwrap().expose().to_owned())
-            .collect();
+        let corpus: String =
+            (0..200).map(|_| SessionToken::generate().unwrap().expose().to_owned()).collect();
         for digit in "0123456789abcdef".chars() {
             assert!(corpus.contains(digit), "hex digit `{digit}` never appeared");
         }
@@ -196,11 +218,11 @@ mod tests {
         for bad in [
             "",
             "short",
-            "9f2c1a7b4e8d3f60a1b2c3d4e5f6071",    // 31 characters
-            "9f2c1a7b4e8d3f60a1b2c3d4e5f607188",  // 33 characters
-            "9F2C1A7B4E8D3F60A1B2C3D4E5F60718",   // uppercase
-            "9f2c1a7b4e8d3f60a1b2c3d4e5f6071g",   // non-hex
-            "../../etc/passwd................",   // traversal attempt of the right length
+            "9f2c1a7b4e8d3f60a1b2c3d4e5f6071",   // 31 characters
+            "9f2c1a7b4e8d3f60a1b2c3d4e5f607188", // 33 characters
+            "9F2C1A7B4E8D3F60A1B2C3D4E5F60718",  // uppercase
+            "9f2c1a7b4e8d3f60a1b2c3d4e5f6071g",  // non-hex
+            "../../etc/passwd................",  // traversal attempt of the right length
         ] {
             assert!(SessionToken::from_hex(bad).is_none(), "`{bad}` must be refused");
         }

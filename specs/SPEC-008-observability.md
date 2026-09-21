@@ -45,15 +45,15 @@ Three layers, each with a different audience:
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-OBS-001` | Every dropped frame MUST be counted and attributed to exactly one layer. | `unit` | `rincon_core::metrics::tests::rq_obs_001_drops_are_attributed` |
-| `RQ-OBS-002` | Counters MUST be readable without locking and without perturbing the audio path. | `unit` | `rincon_core::metrics::tests::rq_obs_002_counters_are_lock_free` |
-| `RQ-OBS-003` | Logs MUST default to `info`, be overridable by `RINCON_LOG`, and MUST NOT include audio samples. | `unit` | `rincon_core::telemetry::tests::rq_obs_003_log_level_and_no_samples` |
-| `RQ-OBS-004` | Log output MUST redact the stream token, replacing it with `<redacted>`. | `unit` | `rincon_stream::token::tests::rq_sec_005_token_is_redacted_in_debug` |
-| `RQ-OBS-005` | The log file MUST be size-capped at 10 MB with rotation; it MUST NOT be able to fill the disk. | `unit` | `rincon_core::telemetry::tests::rq_obs_005_log_is_size_capped` |
-| `RQ-OBS-006` | A diagnostics bundle MUST include app version, OS build, interface summary, counters, and the last 500 log lines. | `unit` | `rincon_core::diagnostics::tests::rq_obs_006_bundle_contents` |
-| `RQ-OBS-007` | The bundle MUST redact the stream token, the machine hostname, and all but the last octet of each IP. | `property` | `rincon_core::diagnostics::tests::rq_obs_007_bundle_is_redacted` |
-| `RQ-OBS-008` | Producing a bundle MUST NOT make any network request. | `unit` | `rincon_core::diagnostics::tests::rq_obs_008_bundle_is_offline` |
-| `RQ-OBS-009` | The UI health indicator MUST reflect a degradation within 500 ms of it being counted. | `unit` | `rincon_engine::tests::rq_obs_009_health_propagates_promptly` |
+| `RQ-OBS-001` | Every dropped frame MUST be counted and attributed to exactly one layer. | `unit` | `crates/rincon-core/src/metrics.rs:87`<br>`crates/rincon-core/src/metrics.rs:279` |
+| `RQ-OBS-002` | Counters MUST be readable without locking and without perturbing the audio path. | `unit` | `crates/rincon-core/src/metrics.rs:302` |
+| `RQ-OBS-003` | Logs MUST default to `info`, be overridable by `RINCON_LOG`, and MUST NOT include audio samples. | `unit` | `crates/rincon-core/src/telemetry.rs:53`<br>`crates/rincon-core/src/telemetry.rs:204`<br>`crates/rincon-core/src/telemetry.rs:217`<br>`crates/rincon-core/src/telemetry.rs:262` |
+| `RQ-OBS-004` | Log output MUST redact the stream token, replacing it with `<redacted>`. | `unit` | `crates/rincon-core/src/stream_url.rs:136`<br>`crates/rincon-stream/src/token.rs:191` |
+| `RQ-OBS-005` | The log file MUST be size-capped at 10 MB with rotation; it MUST NOT be able to fill the disk. | `unit` | `crates/rincon-core/src/telemetry.rs:217`<br>`crates/rincon-core/src/telemetry.rs:282` |
+| `RQ-OBS-006` | A diagnostics bundle MUST include app version, OS build, interface summary, counters, and the last 500 log lines. | `unit` | `crates/rincon-core/src/diagnostics.rs:145`<br>`crates/rincon-core/src/diagnostics.rs:270` |
+| `RQ-OBS-007` | The bundle MUST redact the stream token, the machine hostname, and all but the last octet of each IP. | `property` | `crates/rincon-core/src/diagnostics.rs:289` |
+| `RQ-OBS-008` | Producing a bundle MUST NOT make any network request. | `unit` | `crates/rincon-core/src/diagnostics.rs:145`<br>`crates/rincon-core/src/diagnostics.rs:304` |
+| `RQ-OBS-009` | The UI health indicator MUST reflect a degradation within 500 ms of it being counted. | `unit` | `crates/rincon-core/src/metrics.rs:234`<br>`crates/rincon-core/src/metrics.rs:343` |
 
 ## 6. Health model
 

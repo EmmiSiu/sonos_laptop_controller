@@ -1,0 +1,30 @@
+[package]
+name        = "rincon-testkit"
+description = "Fakes and a mock Sonos player, so the whole of Rincon is testable without hardware."
+publish     = false
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+readme.workspace       = true
+keywords.workspace     = true
+categories.workspace   = true
+
+[dependencies]
+rincon-core      = { workspace = true }
+rincon-audio     = { workspace = true }
+rincon-control   = { workspace = true }
+rincon-discovery = { workspace = true }
+async-trait      = { workspace = true }
+axum             = { workspace = true, default-features = false, features = ["tokio", "http1"] }
+tokio            = { workspace = true, features = ["net", "rt", "sync", "macros"] }
+
+[dev-dependencies]
+reqwest = { workspace = true, default-features = false }
+tokio   = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+url     = { workspace = true }
+
+[lints]
+workspace = true

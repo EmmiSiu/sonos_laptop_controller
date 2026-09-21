@@ -1,0 +1,36 @@
+name: Feature request
+description: Something Rincon should do and does not
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Rincon is spec-first and has explicit non-goals
+        ([SPEC-000 §3](../blob/main/specs/SPEC-000-product.md)). A request that contradicts one
+        is not automatically refused, but it needs an argument for changing the non-goal.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: |
+        What are you trying to do that you cannot? Describe the situation, not the feature —
+        the best solution is often not the one the requester had in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you think should happen
+
+  - type: dropdown
+    id: nongoal
+    attributes:
+      label: Does this contradict a non-goal?
+      options:
+        - "No"
+        - "Yes, and here is why it should change"
+        - "I am not sure"
+    validations:
+      required: true

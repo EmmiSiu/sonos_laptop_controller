@@ -1,0 +1,47 @@
+# Local integration environment.
+#
+#   docker compose -f docker/compose.yaml run --rm gate       the full quality gate
+#   docker compose -f docker/compose.yaml up mock-sonos       a fake speaker on the network
+#
+# Neither service can capture audio: a container has no sound device, and WASAPI is a Windows
+# API. That is the point of the split in `rincon-audio` -- everything above the capture trait
+# is exercised here, and the capture backend itself is verified on hardware (docs/manual-test-log.md).
+
+name: rincon
+
+services:
+  gate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ci
+      target: gate
+    # Caching the registry and the build directory turns a repeat run from minutes into seconds.
+    volumes:
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-target:/rincon/target
+    environment:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+
+  mock-sonos:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ci
+      target: mock-sonos
+    # A fixed address so a test can point at it without discovery.
+    networks:
+      lan:
+        ipv4_address: 172.28.0.10
+    ports:
+      - "1400:1400"
+
+networks:
+  lan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  cargo-registry:
+  cargo-target:

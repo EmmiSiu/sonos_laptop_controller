@@ -275,8 +275,7 @@ mod tests {
         let counters = SessionCounters::new();
         let (_tx, rx) = ring::channel(format(), 100, Arc::clone(&counters));
 
-        let session =
-            CaptureSession::new(format(), rx, counters, SpyGuard(Arc::clone(&dropped)));
+        let session = CaptureSession::new(format(), rx, counters, SpyGuard(Arc::clone(&dropped)));
         assert!(!dropped.load(Ordering::Acquire), "the guard must live while the session does");
 
         drop(session);
@@ -299,11 +298,8 @@ mod tests {
                 "`{forbidden}` would give the capture path a way to persist audio"
             );
         }
-        let sources = [
-            include_str!("ring.rs"),
-            include_str!("convert.rs"),
-            include_str!("synthetic.rs"),
-        ];
+        let sources =
+            [include_str!("ring.rs"), include_str!("convert.rs"), include_str!("synthetic.rs")];
         for source in sources {
             assert!(!source.contains("std::fs"), "the audio path must not touch the filesystem");
             assert!(!source.contains("File::create"), "the audio path must not create files");

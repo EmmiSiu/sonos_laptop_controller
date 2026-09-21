@@ -168,7 +168,7 @@ fn same_host(a: IpAddr, b: IpAddr) -> bool {
     fn normalise(ip: IpAddr) -> IpAddr {
         match ip {
             IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
-            other => other,
+            v4 @ IpAddr::V4(_) => v4,
         }
     }
     normalise(a) == normalise(b)
@@ -209,10 +209,7 @@ mod tests {
         );
 
         // IPv6's wildcard is the same mistake spelled differently.
-        assert!(matches!(
-            config("[::]:0").validate(),
-            Err(ConfigError::WildcardBindNotAllowed(_))
-        ));
+        assert!(matches!(config("[::]:0").validate(), Err(ConfigError::WildcardBindNotAllowed(_))));
 
         // A specific interface is always fine.
         config("192.168.1.20:0").validate().unwrap();

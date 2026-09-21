@@ -67,18 +67,18 @@ sequenceDiagram
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-DISC-001` | An SSDP response missing `LOCATION`, `ST`, or `USN` MUST be discarded without error propagation. | `unit` | `rincon_discovery::ssdp::tests::rq_disc_001_discards_incomplete_responses` |
-| `RQ-DISC-002` | Header parsing MUST be case-insensitive for names and MUST tolerate `\n` as well as `\r\n` line endings. | `property` | `rincon_discovery::ssdp::tests::rq_disc_002_header_parsing_is_lenient` |
-| `RQ-DISC-003` | A `LOCATION` whose host is not a private, link-local, or loopback address MUST be rejected before any request is made (SSRF guard). | `unit` | `rincon_discovery::validate::tests::rq_disc_003_rejects_public_location` |
-| `RQ-DISC-004` | A `LOCATION` with a scheme other than `http` MUST be rejected. | `unit` | `rincon_discovery::validate::tests::rq_disc_004_rejects_non_http_scheme` |
-| `RQ-DISC-005` | The description fetch MUST NOT follow redirects. | `integration` | `rincon_discovery::tests::rq_disc_005_does_not_follow_redirects` |
-| `RQ-DISC-006` | The description response body MUST be capped at 256 KiB; a larger body MUST abort the fetch. | `integration` | `rincon_discovery::tests::rq_disc_006_caps_description_size` |
-| `RQ-DISC-007` | XML parsing MUST reject documents containing a DOCTYPE or entity declaration (XXE / billion-laughs guard). | `unit` | `rincon_discovery::description::tests::rq_disc_007_rejects_doctype` |
-| `RQ-DISC-008` | Parsing MUST NOT panic on any input. Malformed input yields `Err`. | `fuzz` | `fuzz_targets/parse_description.rs`, `rincon_discovery::description::tests::rq_disc_008_malformed_input_never_panics` |
-| `RQ-DISC-009` | Duplicate responses for the same UDN MUST collapse to a single `Device`. | `unit` | `rincon_discovery::tests::rq_disc_009_deduplicates_by_udn` |
-| `RQ-DISC-010` | Discovery MUST probe every non-loopback IPv4 interface, and MUST record which local address reached each device. | `integration` | `rincon_discovery::tests::rq_disc_010_records_reachable_local_address` |
-| `RQ-DISC-011` | Discovery MUST return within `timeout + 500 ms` even when no device answers. | `integration` | `rincon_discovery::tests::rq_disc_011_respects_timeout` |
-| `RQ-DISC-012` | A room name containing XML-escaped or control characters MUST be decoded and sanitised before reaching the UI. | `property` | `rincon_discovery::description::tests::rq_disc_012_sanitises_room_name` |
+| `RQ-DISC-001` | An SSDP response missing `LOCATION`, `ST`, or `USN` MUST be discarded without error propagation. | `unit` | `crates/rincon-discovery/src/ssdp.rs:154`<br>`crates/rincon-discovery/src/ssdp.rs:215` |
+| `RQ-DISC-002` | Header parsing MUST be case-insensitive for names and MUST tolerate `\n` as well as `\r\n` line endings. | `property` | `crates/rincon-discovery/src/ssdp.rs:105`<br>`crates/rincon-discovery/src/ssdp.rs:154`<br>`crates/rincon-discovery/src/ssdp.rs:247` |
+| `RQ-DISC-003` | A `LOCATION` whose host is not a private, link-local, or loopback address MUST be rejected before any request is made (SSRF guard). | `unit` | `crates/rincon-core/src/net.rs:187`<br>`crates/rincon-core/src/net.rs:298` |
+| `RQ-DISC-004` | A `LOCATION` with a scheme other than `http` MUST be rejected. | `unit` | `crates/rincon-core/src/net.rs:187`<br>`crates/rincon-core/src/net.rs:308` |
+| `RQ-DISC-005` | The description fetch MUST NOT follow redirects. | `integration` | `crates/rincon-discovery/src/fetch.rs:58`<br>`crates/rincon-discovery/src/fetch.rs:76`<br>`crates/rincon-discovery/src/fetch.rs:170` |
+| `RQ-DISC-006` | The description response body MUST be capped at 256 KiB; a larger body MUST abort the fetch. | `integration` | `crates/rincon-discovery/src/fetch.rs:76`<br>`crates/rincon-discovery/src/fetch.rs:193`<br>`crates/rincon-testkit/src/mock_sonos.rs:366` |
+| `RQ-DISC-007` | XML parsing MUST reject documents containing a DOCTYPE or entity declaration (XXE / billion-laughs guard). | `unit` | `crates/rincon-core/src/xml.rs:46`<br>`crates/rincon-core/src/xml.rs:104`<br>`crates/rincon-discovery/src/description.rs:85`<br>`crates/rincon-discovery/src/description.rs:267`<br>`crates/rincon-testkit/src/mock_sonos.rs:366` |
+| `RQ-DISC-008` | Parsing MUST NOT panic on any input. Malformed input yields `Err`. | `fuzz` | `crates/rincon-discovery/src/description.rs:85`<br>`crates/rincon-discovery/src/description.rs:285`<br>`crates/rincon-discovery/src/ssdp.rs:154`<br>`crates/rincon-discovery/src/ssdp.rs:278` |
+| `RQ-DISC-009` | Duplicate responses for the same UDN MUST collapse to a single `Device`. | `unit` | `crates/rincon-discovery/src/scan.rs:130`<br>`crates/rincon-discovery/src/scan.rs:373` |
+| `RQ-DISC-010` | Discovery MUST probe every non-loopback IPv4 interface, and MUST record which local address reached each device. | `integration` | `crates/rincon-discovery/src/scan.rs:130` |
+| `RQ-DISC-011` | Discovery MUST return within `timeout + 500 ms` even when no device answers. | `integration` | `crates/rincon-discovery/src/scan.rs:130`<br>`crates/rincon-discovery/src/scan.rs:357` |
+| `RQ-DISC-012` | A room name containing XML-escaped or control characters MUST be decoded and sanitised before reaching the UI. | `property` | `crates/rincon-core/src/device.rs:102`<br>`crates/rincon-core/src/device.rs:235`<br>`crates/rincon-discovery/src/description.rs:85`<br>`crates/rincon-discovery/src/description.rs:306` |
 
 ## 6. Failure modes
 

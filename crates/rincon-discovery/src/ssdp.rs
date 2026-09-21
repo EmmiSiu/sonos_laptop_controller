@@ -216,11 +216,7 @@ USN: uuid:RINCON_949F3EC13E7601400::urn:schemas-upnp-org:device:ZonePlayer:1\r\n
     #[test]
     fn rq_disc_001_discards_incomplete_responses() {
         let cases: [(&str, &[u8], &'static str); 3] = [
-            (
-                "no LOCATION",
-                b"HTTP/1.1 200 OK\r\nST: urn:x\r\nUSN: uuid:a\r\n\r\n",
-                "LOCATION",
-            ),
+            ("no LOCATION", b"HTTP/1.1 200 OK\r\nST: urn:x\r\nUSN: uuid:a\r\n\r\n", "LOCATION"),
             (
                 "no ST or NT",
                 b"HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.1:1400/x\r\nUSN: uuid:a\r\n\r\n",
@@ -341,9 +337,14 @@ NTS: ssdp:alive\r\n\r\n";
         assert!(request.contains("MX: 1\r\n"));
         assert!(request.contains(&format!("ST: {ZONE_PLAYER_ST}\r\n")));
         assert!(request.ends_with("\r\n\r\n"), "the header block must be terminated");
-        assert!(!request.contains("
+        assert!(
+            !request.contains(
+                "
 
-"), "a bare LF pair would truncate the request");
+"
+            ),
+            "a bare LF pair would truncate the request"
+        );
     }
 
     #[test]

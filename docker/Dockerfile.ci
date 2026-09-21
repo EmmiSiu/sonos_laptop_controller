@@ -1,0 +1,54 @@
+# The exact environment CI runs the gate in.
+#
+# Purpose: reproduce a CI failure locally without guessing at toolchain versions, and give
+# contributors on Windows a way to run the whole gate when Smart App Control blocks cargo
+# (see docs/development.md).
+#
+# What this image deliberately cannot do: capture audio. WASAPI is a Windows API and a
+# container has no sound device, so the loopback backend is absent here by design. Everything
+# else -- discovery, control, the stream server, the engine, the frontend -- runs, because
+# every hardware dependency sits behind a trait with a fake.
+
+FROM rust:1.98-bookworm AS base
+
+# `libasound2-dev` is only needed because `cpal` probes for ALSA at build time on Linux. The
+# synthetic backend is what actually runs.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libasound2-dev \
+      pkg-config \
+      nodejs \
+      npm \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN rustup component add clippy rustfmt
+
+WORKDIR /rincon
+
+# Dependency layer: copying only the manifests means a source-only change does not rebuild the
+# entire dependency tree, which is the difference between a 30-second and a 6-minute loop.
+COPY Cargo.toml Cargo.lock rust-toolchain.toml clippy.toml rustfmt.toml deny.toml ./
+COPY crates/ crates/
+COPY apps/desktop/package.json apps/desktop/package-lock.json apps/desktop/
+RUN cargo fetch --locked
+
+COPY . .
+
+# ---------------------------------------------------------------------------------------
+
+FROM base AS gate
+# Mirrors `.github/workflows/ci.yml`, in the same order, so a red container means a red CI.
+CMD ["bash", "-euxc", "\
+    cargo fmt --all -- --check && \
+    cargo clippy --workspace --all-targets --all-features -- -D warnings && \
+    cargo test --workspace --all-features && \
+    node scripts/spec-guard.mjs \
+"]
+
+# ---------------------------------------------------------------------------------------
+
+FROM base AS mock-sonos
+# A fake Sonos on the container network, for exercising discovery and control from outside the
+# Rust test harness -- an integration environment rather than a unit test.
+EXPOSE 1400
+CMD ["cargo", "run", "--release", "-p", "rincon-cli", "--", "doctor"]

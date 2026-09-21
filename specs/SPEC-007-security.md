@@ -84,21 +84,21 @@ Stated so that the boundary is a decision, not an oversight:
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-SEC-001` | No outbound connection MAY be made to a non-private IP address anywhere in the audio or control path. | `unit` | `rincon_core::net::tests::rq_sec_001_no_public_egress` |
-| `RQ-SEC-002` | All XML parsing MUST reject DOCTYPE and entity declarations. | `unit` | `rincon_core::xml::tests::rq_sec_002_doctype_is_rejected_everywhere` |
-| `RQ-SEC-003` | Every network read MUST have an explicit byte cap and an explicit timeout. | `unit` | `rincon_core::limits::tests::rq_sec_003_every_read_is_bounded` |
-| `RQ-SEC-004` | No parser in the workspace MAY panic on adversarial input. | `fuzz` | `fuzz_targets/*`, plus `rq_disc_008` |
-| `RQ-SEC-005` | Secrets (the stream token) MUST be compared in constant time and MUST NOT appear in logs. | `unit` | `rincon_stream::token::tests::rq_sec_005_token_is_redacted_in_debug` |
-| `RQ-SEC-006` | The audio stream MUST be reachable only by an allowlisted peer IP. | `integration` | `rq_strm_004` |
-| `RQ-SEC-007` | Capture MUST NOT run unless a session is active; stopping a session MUST stop capture. | `integration` | `rincon_engine::tests::rq_sec_007_capture_stops_with_session` |
-| `RQ-SEC-008` | The app MUST NOT write captured audio to disk unless the user explicitly requests a dump. | `unit` | `rincon_audio::tests::rq_sec_008_no_implicit_disk_writes` |
-| `RQ-SEC-009` | The app MUST make zero network requests at startup: no update check, no telemetry, no ping. | `integration` | `rincon_desktop::tests::rq_sec_009_startup_makes_no_requests` |
-| `RQ-SEC-010` | `unsafe` MUST be denied workspace-wide; an exception requires an ADR. | `unit` | workspace lint + `scripts/spec-guard.mjs` |
-| `RQ-SEC-011` | Dependencies MUST pass `cargo-deny` (licence + advisory + source) on every PR. | `integration` | CI job `supply-chain` |
-| `RQ-SEC-012` | Release binaries MUST be built from a tagged commit by CI, and the workflow MUST publish provenance attestation. | `integration` | `.github/workflows/release.yml` |
-| `RQ-SEC-013` | The UI MUST run under a CSP with no `unsafe-inline`, no `unsafe-eval`, and no remote origins. | `unit` | `rq_ui_004` |
-| `RQ-SEC-014` | Error messages shown to the user MUST NOT leak absolute filesystem paths or internal addresses. | `unit` | `rincon_core::error::tests::rq_sec_014_errors_do_not_leak_paths` |
-| `RQ-SEC-015` | GitHub Actions MUST be pinned by commit SHA, not by tag. | `unit` | `scripts/spec-guard.mjs` workflow assertion |
+| `RQ-SEC-001` | No outbound connection MAY be made to a non-private IP address anywhere in the audio or control path. | `unit` | `crates/rincon-core/src/net.rs:149`<br>`crates/rincon-core/src/net.rs:187`<br>`crates/rincon-core/src/net.rs:233`<br>`crates/rincon-core/src/net.rs:245` |
+| `RQ-SEC-002` | All XML parsing MUST reject DOCTYPE and entity declarations. | `unit` | `crates/rincon-core/src/xml.rs:46`<br>`crates/rincon-core/src/xml.rs:104` |
+| `RQ-SEC-003` | Every network read MUST have an explicit byte cap and an explicit timeout. | `unit` | `crates/rincon-core/src/limits.rs:101`<br>`crates/rincon-discovery/src/fetch.rs:76`<br>`crates/rincon-discovery/src/fetch.rs:243` |
+| `RQ-SEC-004` | No parser in the workspace MAY panic on adversarial input. | `fuzz` | `.github/workflows/fuzz.yml:25` |
+| `RQ-SEC-005` | Secrets (the stream token) MUST be compared in constant time and MUST NOT appear in logs. | `unit` | `crates/rincon-core/src/stream_url.rs:82`<br>`crates/rincon-core/src/stream_url.rs:136`<br>`crates/rincon-core/src/stream_url.rs:166`<br>`crates/rincon-stream/src/token.rs:75`<br>`crates/rincon-stream/src/token.rs:191` |
+| `RQ-SEC-006` | The audio stream MUST be reachable only by an allowlisted peer IP. | `integration` | `crates/rincon-stream/src/lib.rs:83` |
+| `RQ-SEC-007` | Capture MUST NOT run unless a session is active; stopping a session MUST stop capture. | `integration` | `crates/rincon-audio/src/lib.rs:271`<br>`crates/rincon-engine/src/lib.rs:145`<br>`crates/rincon-engine/src/lib.rs:235` |
+| `RQ-SEC-008` | The app MUST NOT write captured audio to disk unless the user explicitly requests a dump. | `unit` | `crates/rincon-audio/src/lib.rs:289` |
+| `RQ-SEC-009` | The app MUST make zero network requests at startup: no update check, no telemetry, no ping. | `integration` | `.github/workflows/security.yml:83` |
+| `RQ-SEC-010` | `unsafe` MUST be denied workspace-wide; an exception requires an ADR. | `unit` | `scripts/spec-guard.mjs:107` |
+| `RQ-SEC-011` | Dependencies MUST pass `cargo-deny` (licence + advisory + source) on every PR. | `integration` | `.github/workflows/security.yml:28`<br>`.github/workflows/security.yml:42` |
+| `RQ-SEC-012` | Release binaries MUST be built from a tagged commit by CI, and the workflow MUST publish provenance attestation. | `integration` | `.github/workflows/release.yml:46` |
+| `RQ-SEC-013` | The UI MUST run under a CSP with no `unsafe-inline`, no `unsafe-eval`, and no remote origins. | `unit` | `scripts/spec-guard.mjs:107` |
+| `RQ-SEC-014` | Error messages shown to the user MUST NOT leak absolute filesystem paths or internal addresses. | `unit` | `crates/rincon-core/src/error.rs:86`<br>`crates/rincon-core/src/error.rs:175` |
+| `RQ-SEC-015` | GitHub Actions MUST be pinned by commit SHA, not by tag. | `unit` | `scripts/spec-guard.mjs:107` |
 
 ## 7. Rationale: why no TLS on the stream
 

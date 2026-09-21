@@ -10,7 +10,7 @@
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Serializer};
 
 use crate::diagnostics::REDACTED;
 
@@ -18,7 +18,18 @@ use crate::diagnostics::REDACTED;
 ///
 /// Construct through [`StreamUrl::new`], which records where the token sits so that redaction
 /// is a property of the value rather than something each log site must remember.
-#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// # Serialisation
+///
+/// Deliberately **not** `Deserialize`, and `Serialize` emits the *redacted* string.
+///
+/// The derived implementation would have emitted the token. That matters more than it looks:
+/// the session state is serialised across the IPC boundary into a WebView, so a derived
+/// `Serialize` would hand the stream secret to a renderer that also displays device names
+/// supplied by unauthenticated devices on the LAN. Nothing needs to deserialise a stream URL —
+/// it is always constructed from a server that has actually bound — so the trait is simply
+/// absent rather than implemented incorrectly.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct StreamUrl {
     full: String,
     /// Byte range of the token inside `full`.
@@ -66,6 +77,15 @@ impl StreamUrl {
     }
 }
 
+/// Serialises to the redacted form, so the token cannot cross the IPC boundary.
+///
+/// Covers: RQ-SEC-005, RQ-UI-003
+impl Serialize for StreamUrl {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.redacted())
+    }
+}
+
 /// Redacts, so an accidental `{:?}` in a `tracing` field cannot leak the session secret.
 impl fmt::Debug for StreamUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -106,10 +126,7 @@ mod tests {
 
     #[test]
     fn the_url_is_what_a_speaker_will_fetch() {
-        assert_eq!(
-            url().as_str(),
-            format!("http://192.168.1.20:41234/s/{TOKEN}/stream.wav")
-        );
+        assert_eq!(url().as_str(), format!("http://192.168.1.20:41234/s/{TOKEN}/stream.wav"));
         assert_eq!(url().token(), TOKEN);
     }
 
@@ -135,6 +152,28 @@ mod tests {
         let v6 = StreamUrl::new("fe80::1".parse().unwrap(), 8080, TOKEN);
         assert!(v6.as_str().starts_with("http://[fe80::1]:8080/s/"), "got {}", v6.as_str());
         assert_eq!(v6.token(), TOKEN);
+    }
+
+    /// Stands in for the session state, which carries a `StreamUrl` as a field.
+    #[derive(serde::Serialize)]
+    struct Session {
+        url: StreamUrl,
+    }
+
+    /// Covers: RQ-SEC-005
+    #[test]
+    fn rq_sec_005_the_token_cannot_cross_the_ipc_boundary() {
+        // The session state is serialised into a WebView. A derived `Serialize` here would
+        // have shipped the stream secret to a renderer that also displays strings supplied by
+        // unauthenticated devices on the LAN.
+        let json = serde_json::to_string(&url()).expect("a stream URL must serialise");
+        assert!(!json.contains(TOKEN), "the token reached the wire: {json}");
+        assert!(json.contains(REDACTED), "no redaction marker in: {json}");
+        assert!(json.contains("192.168.1.20:41234"), "the address is still useful: {json}");
+
+        // Nested inside a structure, as the session state carries it.
+        let nested = serde_json::to_string(&Session { url: url() }).expect("must serialise");
+        assert!(!nested.contains(TOKEN), "the token leaked when nested: {nested}");
     }
 
     #[test]

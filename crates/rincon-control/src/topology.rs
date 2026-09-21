@@ -232,7 +232,10 @@ mod tests {
     #[test]
     fn rq_ctl_013_rejects_doctype() {
         let hostile = "<!DOCTYPE z [<!ENTITY e SYSTEM 'file:///etc/passwd'>]><ZoneGroupState/>";
-        assert!(matches!(parse(hostile), Err(TopologyError::Guard(XmlGuardError::DoctypeDeclared))));
+        assert!(matches!(
+            parse(hostile),
+            Err(TopologyError::Guard(XmlGuardError::DoctypeDeclared))
+        ));
     }
 
     #[test]
@@ -259,7 +262,8 @@ mod tests {
     #[test]
     fn a_member_outside_any_group_coordinates_itself() {
         // Defensive reading of a malformed document: better than dropping the member.
-        let orphan = "<ZoneGroups><ZoneGroupMember UUID=\"RINCON_LONE\" ZoneName=\"Lone\"/></ZoneGroups>";
+        let orphan =
+            "<ZoneGroups><ZoneGroupMember UUID=\"RINCON_LONE\" ZoneName=\"Lone\"/></ZoneGroups>";
         let topology = parse(orphan).unwrap();
         assert_eq!(topology.coordinator_of("RINCON_LONE"), "RINCON_LONE");
     }

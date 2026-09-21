@@ -23,11 +23,18 @@ use rincon_core::audio::AudioFormat;
 /// Bytes in a canonical PCM WAV header.
 pub const HEADER_LEN: usize = 44;
 
+/// [`HEADER_LEN`] as a `u32`, for the RIFF size arithmetic below.
+const HEADER_LEN_U32: u32 = 44;
+
+// The two spellings of the header length must stay equal; a mismatch would silently corrupt
+// every RIFF chunk size we emit.
+const _: () = assert!(HEADER_LEN == HEADER_LEN_U32 as usize);
+
 /// The largest `data` chunk a 32-bit RIFF field can describe, leaving room for the header.
 ///
 /// Using `u32::MAX` itself would make the RIFF chunk size overflow; subtracting the header
 /// keeps both fields expressible.
-pub const MAX_DATA_BYTES: u32 = u32::MAX - HEADER_LEN as u32;
+pub const MAX_DATA_BYTES: u32 = u32::MAX - HEADER_LEN_U32;
 
 /// Builds the header for `format`, declaring `data_bytes` of audio.
 ///
@@ -112,7 +119,7 @@ mod tests {
     /// than field by field.
     const GOLDEN_CD_1000: [u8; HEADER_LEN] = [
         b'R', b'I', b'F', b'F', // RIFF
-        0xE4, 0x04, 0x00, 0x00, // chunk size = 1000 + 36 = 1036
+        0x0C, 0x04, 0x00, 0x00, // chunk size = 1000 + 36 = 1036 = 0x040C, little-endian
         b'W', b'A', b'V', b'E', // WAVE
         b'f', b'm', b't', b' ', // fmt
         0x10, 0x00, 0x00, 0x00, // subchunk size = 16

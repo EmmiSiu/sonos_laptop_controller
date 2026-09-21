@@ -60,19 +60,19 @@ constructed anywhere in the program.
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-CTL-001` | A generated SOAP envelope MUST be byte-exact against the committed golden fixture for a given action and arguments. | `golden` | `rincon_control::soap::tests::rq_ctl_001_envelope_matches_golden` |
-| `RQ-CTL-002` | Every interpolated value MUST be XML-escaped for `&`, `<`, `>`, `"`, and `'`. | `property` | `rincon_control::soap::tests::rq_ctl_002_all_values_are_escaped` |
-| `RQ-CTL-003` | A value containing `</s:Body>` or similar MUST NOT be able to break out of its element. | `property` | `rincon_control::soap::tests::rq_ctl_003_injection_cannot_escape_element` |
-| `RQ-CTL-004` | DIDL-Lite metadata MUST be escaped **twice** (it is an XML document embedded in an XML text node). | `golden` | `rincon_control::didl::tests::rq_ctl_004_didl_is_double_escaped` |
-| `RQ-CTL-005` | The `SOAPACTION` header MUST be exactly `"<serviceType>#<action>"`, quoted. | `unit` | `rincon_control::soap::tests::rq_ctl_005_soapaction_header_is_exact` |
-| `RQ-CTL-006` | A SOAP `Fault` response MUST be parsed into a typed `ControlError::Upnp { code, description }`, never treated as success. | `unit` | `rincon_control::soap::tests::rq_ctl_006_parses_fault_into_typed_error` |
-| `RQ-CTL-007` | UPnP error `701` (transition not available) and `714` (illegal MIME) MUST map to distinct, actionable error variants. | `unit` | `rincon_control::error::tests::rq_ctl_007_maps_known_upnp_codes` |
-| `RQ-CTL-008` | `coordinator_of` MUST return the coordinator when the target is a grouped member, and the target itself when standalone. | `unit` | `rincon_control::topology::tests::rq_ctl_008_resolves_group_coordinator` |
-| `RQ-CTL-009` | Control requests MUST be sent only to private addresses (shares the SPEC-003 guard). | `unit` | `rincon_control::tests::rq_ctl_009_refuses_public_target` |
-| `RQ-CTL-010` | Every request MUST carry a timeout of at most 5 s and MUST NOT retry non-idempotent actions automatically. | `integration` | `rincon_control::tests::rq_ctl_010_times_out_and_does_not_retry_play` |
-| `RQ-CTL-011` | Response bodies MUST be capped at 1 MiB. | `integration` | `rincon_control::tests::rq_ctl_011_caps_response_size` |
-| `RQ-CTL-012` | `Volume` MUST be unconstructible outside `0..=100`. | `property` | `rincon_control::volume::tests::rq_ctl_012_volume_is_always_in_range` |
-| `RQ-CTL-013` | Zone-group topology parsing MUST reject a DOCTYPE, as description parsing does. | `unit` | `rincon_control::topology::tests::rq_ctl_013_rejects_doctype` |
+| `RQ-CTL-001` | A generated SOAP envelope MUST be byte-exact against the committed golden fixture for a given action and arguments. | `golden` | `crates/rincon-control/src/soap.rs:112`<br>`crates/rincon-control/src/soap.rs:253`<br>`crates/rincon-testkit/src/mock_sonos.rs:304` |
+| `RQ-CTL-002` | Every interpolated value MUST be XML-escaped for `&`, `<`, `>`, `"`, and `'`. | `property` | `crates/rincon-control/src/soap.rs:112`<br>`crates/rincon-control/src/soap.rs:277` |
+| `RQ-CTL-003` | A value containing `</s:Body>` or similar MUST NOT be able to break out of its element. | `property` | `crates/rincon-control/src/soap.rs:112`<br>`crates/rincon-control/src/soap.rs:289` |
+| `RQ-CTL-004` | DIDL-Lite metadata MUST be escaped **twice** (it is an XML document embedded in an XML text node). | `golden` | `crates/rincon-control/src/didl.rs:51`<br>`crates/rincon-control/src/didl.rs:95` |
+| `RQ-CTL-005` | The `SOAPACTION` header MUST be exactly `"<serviceType>#<action>"`, quoted. | `unit` | `crates/rincon-control/src/soap.rs:149`<br>`crates/rincon-control/src/soap.rs:261`<br>`crates/rincon-testkit/src/mock_sonos.rs:304` |
+| `RQ-CTL-006` | A SOAP `Fault` response MUST be parsed into a typed `ControlError::Upnp { code, description }`, never treated as success. | `unit` | `crates/rincon-control/src/soap.rs:165`<br>`crates/rincon-control/src/soap.rs:313`<br>`crates/rincon-testkit/src/mock_sonos.rs:337` |
+| `RQ-CTL-007` | UPnP error `701` (transition not available) and `714` (illegal MIME) MUST map to distinct, actionable error variants. | `unit` | `crates/rincon-control/src/error.rs:81`<br>`crates/rincon-control/src/error.rs:166`<br>`crates/rincon-testkit/src/mock_sonos.rs:337` |
+| `RQ-CTL-008` | `coordinator_of` MUST return the coordinator when the target is a grouped member, and the target itself when standalone. | `unit` | `crates/rincon-control/src/lib.rs:453`<br>`crates/rincon-control/src/topology.rs:55`<br>`crates/rincon-control/src/topology.rs:105`<br>`crates/rincon-control/src/topology.rs:191`<br>`crates/rincon-testkit/src/mock_sonos.rs:351` |
+| `RQ-CTL-009` | Control requests MUST be sent only to private addresses (shares the SPEC-003 guard). | `unit` | `crates/rincon-control/src/lib.rs:477`<br>`crates/rincon-core/src/net.rs:187`<br>`crates/rincon-core/src/net.rs:325` |
+| `RQ-CTL-010` | Every request MUST carry a timeout of at most 5 s and MUST NOT retry non-idempotent actions automatically. | `integration` | `crates/rincon-control/src/lib.rs:402` |
+| `RQ-CTL-011` | Response bodies MUST be capped at 1 MiB. | `integration` | `crates/rincon-control/src/lib.rs:432` |
+| `RQ-CTL-012` | `Volume` MUST be unconstructible outside `0..=100`. | `property` | `crates/rincon-control/src/volume.rs:35`<br>`crates/rincon-control/src/volume.rs:110` |
+| `RQ-CTL-013` | Zone-group topology parsing MUST reject a DOCTYPE, as description parsing does. | `unit` | `crates/rincon-control/src/soap.rs:165`<br>`crates/rincon-control/src/soap.rs:365`<br>`crates/rincon-control/src/topology.rs:105`<br>`crates/rincon-control/src/topology.rs:231`<br>`crates/rincon-core/src/xml.rs:46`<br>`crates/rincon-core/src/xml.rs:104` |
 
 ## 6. Failure modes
 

@@ -1,0 +1,30 @@
+[package]
+name        = "rincon-ipc"
+description = "The command surface the desktop interface calls, testable without a WebView."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+readme.workspace       = true
+keywords.workspace     = true
+categories.workspace   = true
+
+[dependencies]
+rincon-core      = { workspace = true }
+rincon-audio     = { workspace = true }
+rincon-control   = { workspace = true }
+rincon-discovery = { workspace = true }
+rincon-engine    = { workspace = true }
+serde            = { workspace = true }
+thiserror        = { workspace = true }
+tracing          = { workspace = true }
+
+[dev-dependencies]
+rincon-testkit = { workspace = true }
+serde_json     = { workspace = true }
+tokio          = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
+[lints]
+workspace = true

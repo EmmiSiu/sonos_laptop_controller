@@ -1,0 +1,42 @@
+[package]
+name    = "rincon-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Its own workspace: `cargo-fuzz` needs nightly and a sanitiser runtime, and neither belongs in
+# the toolchain everyone else uses to run `cargo test`.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys    = "0.4"
+rincon-core      = { path = "../crates/rincon-core" }
+rincon-control   = { path = "../crates/rincon-control" }
+rincon-discovery = { path = "../crates/rincon-discovery" }
+
+[[bin]]
+name = "parse_ssdp"
+path = "fuzz_targets/parse_ssdp.rs"
+test = false
+doc  = false
+
+[[bin]]
+name = "parse_description"
+path = "fuzz_targets/parse_description.rs"
+test = false
+doc  = false
+
+[[bin]]
+name = "parse_soap"
+path = "fuzz_targets/parse_soap.rs"
+test = false
+doc  = false
+
+[[bin]]
+name = "parse_topology"
+path = "fuzz_targets/parse_topology.rs"
+test = false
+doc  = false

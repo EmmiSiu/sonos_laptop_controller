@@ -197,12 +197,7 @@ fn finish(raw: Raw) -> Result<DeviceDescription, DescriptionError> {
         reason: source.to_string(),
     })?;
 
-    Ok(DeviceDescription {
-        udn,
-        room,
-        model,
-        device_type: raw.device_type.unwrap_or_default(),
-    })
+    Ok(DeviceDescription { udn, room, model, device_type: raw.device_type.unwrap_or_default() })
 }
 
 #[cfg(test)]
@@ -270,16 +265,10 @@ mod tests {
         let xxe = r#"<?xml version="1.0"?>
 <!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]>
 <root><device><UDN>uuid:x</UDN><roomName>&xxe;</roomName></device></root>"#;
-        assert!(matches!(
-            parse(xxe),
-            Err(DescriptionError::Guard(XmlGuardError::DoctypeDeclared))
-        ));
+        assert!(matches!(parse(xxe), Err(DescriptionError::Guard(XmlGuardError::DoctypeDeclared))));
 
         let bomb = "<!ENTITY lol 'lol'><root/>";
-        assert!(matches!(
-            parse(bomb),
-            Err(DescriptionError::Guard(XmlGuardError::EntityDeclared))
-        ));
+        assert!(matches!(parse(bomb), Err(DescriptionError::Guard(XmlGuardError::EntityDeclared))));
     }
 
     /// Covers: RQ-DISC-008
@@ -350,7 +339,10 @@ mod tests {
     #[test]
     fn an_oversized_document_is_refused_by_the_guard() {
         let huge = format!("<root>{}</root>", "x".repeat(rincon_core::limits::MAX_XML_BYTES));
-        assert!(matches!(parse(&huge), Err(DescriptionError::Guard(XmlGuardError::TooLarge { .. }))));
+        assert!(matches!(
+            parse(&huge),
+            Err(DescriptionError::Guard(XmlGuardError::TooLarge { .. }))
+        ));
     }
 
     #[test]

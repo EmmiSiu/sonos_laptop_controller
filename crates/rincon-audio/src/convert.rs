@@ -34,8 +34,7 @@ pub fn f32_to_i16(sample: f32) -> i16 {
         return 0;
     }
     let clamped = sample.clamp(-1.0, 1.0);
-    let scaled =
-        if clamped >= 0.0 { clamped * POSITIVE_SCALE } else { clamped * NEGATIVE_SCALE };
+    let scaled = if clamped >= 0.0 { clamped * POSITIVE_SCALE } else { clamped * NEGATIVE_SCALE };
     scaled.round() as i16
 }
 

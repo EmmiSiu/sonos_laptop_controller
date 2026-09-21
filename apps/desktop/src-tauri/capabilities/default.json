@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The smallest capability set Rincon can run with: its own commands, plus opening a URL in the system browser for the documentation links. No shell, no filesystem, no HTTP from the renderer.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:allow-open-url"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rincon",
+  "version": "0.1.0",
+  "identifier": "dev.rincon.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "Rincon",
+        "width": 480,
+        "height": 720,
+        "minWidth": 400,
+        "minHeight": 600,
+        "resizable": true,
+        "theme": "Dark",
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": ["icons/icon.ico"],
+    "shortDescription": "Play your laptop's audio on a Sonos speaker",
+    "longDescription": "Rincon captures your system audio and serves it to a Sonos speaker over your local network. No account, no cloud, no telemetry.",
+    "copyright": "MIT licensed. Not affiliated with Sonos, Inc.",
+    "category": "Music",
+    "windows": {
+      "allowDowngrades": false
+    }
+  }
+}

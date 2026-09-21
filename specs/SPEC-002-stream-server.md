@@ -96,21 +96,21 @@ pub struct Handle {
 
 | ID | Requirement | Verification | Covered by |
 | -- | ----------- | ------------ | ---------- |
-| `RQ-STRM-001` | The WAV header MUST be byte-exact for a given `AudioFormat`, matching the committed golden fixture. | `golden` | `rincon_stream::wav::tests::rq_strm_001_header_matches_golden` |
-| `RQ-STRM-002` | The declared `data` chunk size MUST be the largest value a 32-bit RIFF field can express, and the RIFF chunk size MUST NOT wrap. | `unit` | `rincon_stream::wav::tests::rq_strm_002_data_chunk_is_the_largest_the_format_allows` |
-| `RQ-STRM-015` | The server MUST keep serving after the stream passes the declared `data` size; a session MUST NOT terminate at that boundary. | `integration` | `rincon_stream::tests::rq_strm_015_serving_continues_past_the_declared_size` |
-| `RQ-STRM-003` | The stream path MUST contain at least 128 bits of cryptographically random entropy, generated per session. | `unit` | `rincon_stream::token::tests::rq_strm_003_token_has_128_bits_of_entropy` |
-| `RQ-STRM-004` | A request from an IP that is not in `allowed_peers` MUST be refused with `403` and MUST NOT reach the audio source. | `integration` | `rincon_stream::tests::rq_strm_004_rejects_unallowlisted_peer` |
-| `RQ-STRM-005` | Token comparison MUST be constant-time with respect to the token value. | `unit` | `rincon_stream::token::tests::rq_strm_005_comparison_is_constant_time` |
-| `RQ-STRM-006` | A request with a wrong token MUST return `404` (not `403`), so a prober cannot distinguish "wrong token" from "no such route". | `integration` | `rincon_stream::tests::rq_strm_006_wrong_token_is_indistinguishable_from_404` |
-| `RQ-STRM-007` | The server MUST refuse to bind to `0.0.0.0` unless `allow_wildcard_bind` is explicitly set. | `unit` | `rincon_stream::config::tests::rq_strm_007_wildcard_bind_requires_opt_in` |
-| `RQ-STRM-008` | Concurrent connections beyond `max_connections` MUST be rejected with `503` without disturbing the active stream. | `integration` | `rincon_stream::tests::rq_strm_008_enforces_connection_cap` |
-| `RQ-STRM-009` | A consumer disconnecting MUST NOT terminate the server or the capture session. | `integration` | `rincon_stream::tests::rq_strm_009_survives_consumer_disconnect` |
-| `RQ-STRM-010` | A `HEAD` request MUST return the same headers as `GET` with no body. | `integration` | `rincon_stream::tests::rq_strm_010_head_returns_headers_without_body` |
-| `RQ-STRM-011` | When the ring underruns, the server MUST emit digital silence rather than stalling the socket or closing the connection. | `integration` | `rincon_stream::tests::rq_strm_011_underrun_emits_silence_not_stall` |
-| `RQ-STRM-012` | The server MUST NOT expose any route other than the tokenised stream path: `/`, `/..`, and any traversal attempt MUST return `404`. | `integration` | `rincon_stream::tests::rq_strm_012_no_other_routes_exist` |
-| `RQ-STRM-013` | Response headers MUST include `X-Content-Type-Options: nosniff` and MUST NOT include a `Server` banner revealing the version. | `integration` | `rincon_stream::tests::rq_strm_013_security_headers_present` |
-| `RQ-STRM-014` | Bytes served MUST equal bytes read from the ring, modulo injected silence, with no duplication or reordering. | `integration` | `rincon_stream::tests::rq_strm_014_byte_stream_is_faithful` |
+| `RQ-STRM-001` | The WAV header MUST be byte-exact for a given `AudioFormat`, matching the committed golden fixture. | `golden` | `crates/rincon-stream/src/wav.rs:41`<br>`crates/rincon-stream/src/wav.rs:79`<br>`crates/rincon-stream/src/wav.rs:136` |
+| `RQ-STRM-002` | The declared `data` chunk size MUST be the largest value a 32-bit RIFF field can express, and the RIFF chunk size MUST NOT wrap. | `unit` | `crates/rincon-stream/src/wav.rs:79`<br>`crates/rincon-stream/src/wav.rs:142` |
+| `RQ-STRM-015` | The server MUST keep serving after the stream passes the declared `data` size; a session MUST NOT terminate at that boundary. | `integration` | `crates/rincon-stream/src/lib.rs:302`<br>`crates/rincon-stream/src/server.rs:342` |
+| `RQ-STRM-003` | The stream path MUST contain at least 128 bits of cryptographically random entropy, generated per session. | `unit` | `crates/rincon-stream/src/token.rs:44`<br>`crates/rincon-stream/src/token.rs:141` |
+| `RQ-STRM-004` | A request from an IP that is not in `allowed_peers` MUST be refused with `403` and MUST NOT reach the audio source. | `integration` | `crates/rincon-stream/src/config.rs:155`<br>`crates/rincon-stream/src/config.rs:225`<br>`crates/rincon-stream/src/lib.rs:83`<br>`crates/rincon-stream/src/server.rs:271` |
+| `RQ-STRM-005` | Token comparison MUST be constant-time with respect to the token value. | `unit` | `crates/rincon-stream/src/server.rs:277`<br>`crates/rincon-stream/src/token.rs:75`<br>`crates/rincon-stream/src/token.rs:170` |
+| `RQ-STRM-006` | A request with a wrong token MUST return `404` (not `403`), so a prober cannot distinguish "wrong token" from "no such route". | `integration` | `crates/rincon-stream/src/lib.rs:99`<br>`crates/rincon-stream/src/server.rs:277` |
+| `RQ-STRM-007` | The server MUST refuse to bind to `0.0.0.0` unless `allow_wildcard_bind` is explicitly set. | `unit` | `crates/rincon-stream/src/config.rs:139`<br>`crates/rincon-stream/src/config.rs:202`<br>`crates/rincon-stream/src/server.rs:181` |
+| `RQ-STRM-008` | Concurrent connections beyond `max_connections` MUST be rejected with `503` without disturbing the active stream. | `integration` | `crates/rincon-stream/src/lib.rs:250`<br>`crates/rincon-stream/src/server.rs:283` |
+| `RQ-STRM-009` | A consumer disconnecting MUST NOT terminate the server or the capture session. | `integration` | `crates/rincon-stream/src/lib.rs:270`<br>`crates/rincon-stream/src/server.rs:299` |
+| `RQ-STRM-010` | A `HEAD` request MUST return the same headers as `GET` with no body. | `integration` | `crates/rincon-stream/src/lib.rs:164`<br>`crates/rincon-stream/src/server.rs:293` |
+| `RQ-STRM-011` | When the ring underruns, the server MUST emit digital silence rather than stalling the socket or closing the connection. | `integration` | `crates/rincon-stream/src/lib.rs:214`<br>`crates/rincon-stream/src/server.rs:342`<br>`crates/rincon-stream/src/server.rs:384` |
+| `RQ-STRM-012` | The server MUST NOT expose any route other than the tokenised stream path: `/`, `/..`, and any traversal attempt MUST return `404`. | `integration` | `crates/rincon-stream/src/lib.rs:124`<br>`crates/rincon-stream/src/server.rs:181` |
+| `RQ-STRM-013` | Response headers MUST include `X-Content-Type-Options: nosniff` and MUST NOT include a `Server` banner revealing the version. | `integration` | `crates/rincon-stream/src/lib.rs:147`<br>`crates/rincon-stream/src/server.rs:181`<br>`crates/rincon-stream/src/server.rs:319` |
+| `RQ-STRM-014` | Bytes served MUST equal bytes read from the ring, modulo injected silence, with no duplication or reordering. | `integration` | `crates/rincon-stream/src/lib.rs:181`<br>`crates/rincon-stream/src/server.rs:342` |
 
 ## 7. Failure modes
 

@@ -1,0 +1,65 @@
+name: Bug report
+description: Something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: if audio plays but is delayed by a second or two, that is the Sonos
+        firmware buffer and not a bug. See [docs/latency.md](../blob/main/docs/latency.md).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it failed
+      description: The interface shows a five-step stepper while connecting. Which step?
+      options:
+        - Finding the group leader
+        - Opening system audio
+        - Starting the local stream
+        - Pointing the speaker at it
+        - Starting playback
+        - Waiting for the speaker to connect
+        - It connected, then went wrong
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics bundle
+      description: |
+        In the app, or `rincon doctor` from the CLI. It is redacted before it is written —
+        no token, no hostname, and only the subnet of each address.
+      render: text
+
+  - type: input
+    id: speaker
+    attributes:
+      label: Speaker model and firmware
+      placeholder: Sonos One (S13), firmware 70.3
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 26200
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: The Sonos app can see and play to this speaker
+          required: true
+        - label: I ran `rincon doctor`, or tried the checklist the app showed
+          required: false

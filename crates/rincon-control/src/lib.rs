@@ -215,14 +215,9 @@ impl TransportControl for SoapControl {
     }
 
     async fn play(&self, target: &Device) -> Result<(), ControlError> {
-        self.call(
-            target,
-            Service::AvTransport,
-            "Play",
-            &[("InstanceID", "0"), ("Speed", "1")],
-        )
-        .await
-        .map(drop)
+        self.call(target, Service::AvTransport, "Play", &[("InstanceID", "0"), ("Speed", "1")])
+            .await
+            .map(drop)
     }
 
     async fn stop(&self, target: &Device) -> Result<(), ControlError> {
@@ -348,10 +343,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/MediaRenderer/AVTransport/Control"))
-            .and(header(
-                "SOAPACTION",
-                "\"urn:schemas-upnp-org:service:AVTransport:1#Play\"",
-            ))
+            .and(header("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#Play\""))
             .respond_with(ResponseTemplate::new(200).set_body_string(ok_body("Play", "")))
             .expect(1)
             .mount(&server)

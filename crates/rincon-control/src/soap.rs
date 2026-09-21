@@ -205,10 +205,7 @@ pub fn parse_response(body: &str) -> Result<BTreeMap<String, String>, SoapError>
 
 /// Builds a typed fault from the elements of a `Fault` body.
 fn fault_from(values: &BTreeMap<String, String>) -> SoapError {
-    let code = values
-        .get("errorCode")
-        .and_then(|raw| raw.trim().parse::<u16>().ok())
-        .unwrap_or(0);
+    let code = values.get("errorCode").and_then(|raw| raw.trim().parse::<u16>().ok()).unwrap_or(0);
     let description = values
         .get("errorDescription")
         .or_else(|| values.get("faultstring"))
@@ -253,8 +250,7 @@ mod tests {
     /// Covers: RQ-CTL-001
     #[test]
     fn rq_ctl_001_envelope_matches_golden() {
-        let built =
-            envelope(Service::AvTransport, "Play", &[("InstanceID", "0"), ("Speed", "1")]);
+        let built = envelope(Service::AvTransport, "Play", &[("InstanceID", "0"), ("Speed", "1")]);
         assert_eq!(built, GOLDEN_PLAY);
     }
 

@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    /* The window is small and always dark; a full-bleed gradient keeps it from looking like
+       an unstyled page while costing nothing at runtime. */
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #12212b 0%, transparent 60%),
+      #07090d;
+    -webkit-user-select: none;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  /* Text the user may want to copy -- a diagnostics bundle, a firewall command -- opts back in. */
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid theme("colors.accent.DEFAULT");
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

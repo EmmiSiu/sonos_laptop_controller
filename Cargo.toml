@@ -6,7 +6,16 @@ members = [
     "crates/rincon-discovery",
     "crates/rincon-control",
     "crates/rincon-stream",
+    "crates/rincon-engine",
+    "crates/rincon-ipc",
+    "crates/rincon-testkit",
+    "crates/rincon-cli",
 ]
+
+# The desktop shell is its own workspace: Tauri needs webkit2gtk on Linux, and dragging that
+# into every `cargo test` would mean installing GTK in CI to test a WAV header. The logic it
+# wraps lives in `rincon-ipc`, which is a member and is tested on all three platforms.
+exclude = ["apps/desktop/src-tauri", "fuzz"]
 
 [workspace.package]
 version      = "0.1.0"
@@ -35,6 +44,7 @@ rincon-control   = { path = "crates/rincon-control",   version = "0.1.0" }
 rincon-audio     = { path = "crates/rincon-audio",     version = "0.1.0", default-features = false }
 rincon-stream    = { path = "crates/rincon-stream",    version = "0.1.0" }
 rincon-engine    = { path = "crates/rincon-engine",    version = "0.1.0" }
+rincon-ipc       = { path = "crates/rincon-ipc",       version = "0.1.0" }
 rincon-testkit   = { path = "crates/rincon-testkit",   version = "0.1.0" }
 
 # --- async runtime & networking ---

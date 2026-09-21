@@ -60,7 +60,8 @@ impl SyntheticSource {
         reason = "frame indices are session-scale; float precision is ample for a test tone"
     )]
     pub fn sample(&self, frame: u64, channel: u16) -> f32 {
-        let rate = f32::from(u16::try_from(self.format.sample_rate.hz() / 100).unwrap_or(480)) * 100.0;
+        let rate =
+            f32::from(u16::try_from(self.format.sample_rate.hz() / 100).unwrap_or(480)) * 100.0;
         let detune = f32::from(channel).mul_add(0.05, 1.0);
         let seed_offset = (self.seed % 1_000) as f32 / 1_000.0;
         let phase = ((frame as f32 / rate) * BASE_HZ).mul_add(detune, seed_offset);
@@ -183,7 +184,10 @@ impl Drop for SyntheticGuard {
 /// Where [`SyntheticCapture`] models "a device that keeps producing", this models "exactly
 /// these samples, then silence" — which is what a golden test over the stream server needs.
 #[must_use]
-pub fn scripted(format: AudioFormat, buffers: &[Vec<f32>]) -> (FrameReceiver, Arc<SessionCounters>) {
+pub fn scripted(
+    format: AudioFormat,
+    buffers: &[Vec<f32>],
+) -> (FrameReceiver, Arc<SessionCounters>) {
     let counters = SessionCounters::new();
     let total_frames: usize = buffers.iter().map(Vec::len).sum::<usize>().max(1);
     let capacity_ms =

@@ -240,6 +240,10 @@ mod tests {
             collected[wav::HEADER_LEN..].iter().all(|&b| b == 0),
             "an underrun must produce digital silence, not stale or random audio"
         );
+
+        // Release the endless response before shutting down. `Handle::shutdown` would force
+        // the listener closed anyway after its grace period, but a test should not spend it.
+        drop(stream);
         handle.shutdown().await;
     }
 
@@ -259,6 +263,7 @@ mod tests {
         // The first stream is undisturbed by the refusal.
         assert_eq!(first.status(), 200);
         drop(first);
+        drop(second);
         handle.shutdown().await;
     }
 
@@ -290,6 +295,7 @@ mod tests {
         let response = reconnected.expect("the server never accepted a reconnect");
         assert_eq!(response.status(), 200);
         assert_eq!(handle.active_connections(), 1);
+        drop(response);
         handle.shutdown().await;
     }
 
@@ -341,12 +347,33 @@ mod tests {
 
     #[tokio::test]
     async fn a_wildcard_bind_is_refused_before_a_socket_is_opened() {
-        let config = StreamConfig::new(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0), LOOPBACK, format());
+        let config =
+            StreamConfig::new(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0), LOOPBACK, format());
         let counters = SessionCounters::new();
         let (_tx, rx) = rincon_audio::ring::channel(format(), 100, Arc::clone(&counters));
 
         let error = bind(config, rx, counters).await.unwrap_err();
         assert!(matches!(error, StreamError::Config(ConfigError::WildcardBindNotAllowed(_))));
+    }
+
+    #[tokio::test]
+    async fn shutdown_is_bounded_even_with_a_live_stream_attached() {
+        // The failure this pins down actually happened: a purely graceful shutdown waits for
+        // the in-flight response to finish, and the in-flight response here is *endless*, so
+        // the wait never ends. Clicking Stop must not hang the interface.
+        let config = StreamConfig::new(bind_addr(), LOOPBACK, format());
+        let handle = serve_live(config).await;
+
+        let held = client().get(handle.url.as_str()).send().await.unwrap();
+        assert_eq!(held.status(), 200);
+
+        let started = std::time::Instant::now();
+        // `held` is deliberately still alive across the shutdown.
+        handle.shutdown().await;
+        let elapsed = started.elapsed();
+
+        assert!(elapsed < Duration::from_secs(3), "shutdown took {elapsed:?} with a live stream");
+        drop(held);
     }
 
     #[tokio::test]

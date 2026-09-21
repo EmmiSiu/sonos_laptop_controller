@@ -1,0 +1,39 @@
+[package]
+name        = "rincon-cli"
+description = "Headless Rincon: discovery, control, and streaming without a desktop."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+readme.workspace       = true
+keywords.workspace     = true
+categories.workspace   = true
+
+[[bin]]
+name = "rincon"
+path = "src/main.rs"
+
+[features]
+# Re-exported from `rincon-audio` so the `cfg(feature = "loopback")` in `main.rs` refers to a
+# feature this crate actually declares. Without it the cfg is silently always-false, and the
+# binary quietly ships with generated audio instead of the real device.
+default  = ["loopback"]
+loopback = ["rincon-audio/loopback"]
+
+[dependencies]
+rincon-core      = { workspace = true }
+rincon-audio     = { workspace = true }
+rincon-control   = { workspace = true }
+rincon-discovery = { workspace = true }
+rincon-engine    = { workspace = true }
+rincon-stream    = { workspace = true }
+anyhow           = { workspace = true }
+clap             = { workspace = true }
+if-addrs         = { workspace = true }
+tokio            = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "time"] }
+tracing          = { workspace = true }
+
+[lints]
+workspace = true

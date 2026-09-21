@@ -113,10 +113,7 @@ pub async fn get_bounded_bytes(
     read_capped(response, budget).await
 }
 
-async fn read_capped(
-    mut response: reqwest::Response,
-    budget: Budget,
-) -> Result<Bytes, FetchError> {
+async fn read_capped(mut response: reqwest::Response, budget: Budget) -> Result<Bytes, FetchError> {
     let mut collected = Vec::with_capacity(8 * 1024);
     loop {
         let next = tokio::time::timeout(budget.timeout, response.chunk())

@@ -1,0 +1,172 @@
+# The quality gate. Every job here is a hard requirement for merging; there is no "warn" tier.
+#
+# Every action is pinned by commit SHA rather than by tag, because a tag is mutable and a
+# compromised action runs with our repository token. See RQ-SEC-015.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to a PR makes the previous run irrelevant.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # A build that hits the network mid-compile is a build that fails at 3am for no reason.
+  CARGO_NET_RETRY: 3
+  RUSTFLAGS: -D warnings
+
+jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  lint:
+    # Covers: RQ-CORE-002
+    name: clippy (pedantic + nursery)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: clippy
+        # `--all-targets` includes tests and examples: the bar applies to them too.
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  test:
+    # Covers: RQ-CORE-003
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: ${{ matrix.os }}
+
+      - name: ALSA headers (Linux only, for the cpal build)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: test
+        # The runners have no sound card and no Sonos on the LAN. Everything still runs,
+        # because every hardware dependency sits behind a trait with a fake in `rincon-testkit`.
+        run: cargo test --workspace --all-features
+
+      - name: build the CLI
+        run: cargo build -p rincon-cli --release
+
+  msrv:
+    name: msrv (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: msrv
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: check against the declared minimum
+        # A README that claims 1.85 while the code needs 1.89 is a README that wastes an
+        # afternoon of somebody's time.
+        run: cargo check --workspace --all-features
+
+  spec-guard:
+    name: spec-guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 20
+      - name: every requirement has a test
+        run: node scripts/spec-guard.mjs
+
+  frontend:
+    # Covers: RQ-UI-008
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: bindings
+
+      - run: npm ci
+
+      - name: bindings are current
+        working-directory: .
+        # The TypeScript types are generated from the Rust DTOs. Regenerating and diffing is
+        # what turns "someone renamed a field" into a red build rather than an `undefined`
+        # in front of a user.
+        run: |
+          cargo run -q -p rincon-ipc --example bindings
+          git diff --exit-code -- apps/desktop/src/lib/bindings.ts \
+            || { echo "::error::bindings.ts is out of date. Run 'just bindings' and commit it."; exit 1; }
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx vite build
+
+  desktop:
+    name: desktop shell (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.os }}-desktop
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: build the frontend the shell embeds
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npx vite build
+
+      - name: check the shell compiles
+        # The shell is its own workspace (Tauri needs GTK on Linux, which the core workspace
+        # must not require), so it is checked here rather than by `cargo check --workspace`.
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings

@@ -1,0 +1,9 @@
+# Every change gets a review. The specs get a closer one, because a wrong requirement
+# propagates into code and tests before anyone notices.
+
+*                   @EmmiSiu
+
+/specs/             @EmmiSiu
+/SECURITY.md        @EmmiSiu
+/deny.toml          @EmmiSiu
+/.github/workflows/ @EmmiSiu

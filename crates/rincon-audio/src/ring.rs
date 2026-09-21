@@ -172,13 +172,8 @@ pub fn channel(
         let _ = free.push(Block::with_capacity(FRAMES_PER_BLOCK, channels));
     }
 
-    let shared = Arc::new(Shared {
-        filled,
-        free,
-        device_lost: AtomicBool::new(false),
-        counters,
-        format,
-    });
+    let shared =
+        Arc::new(Shared { filled, free, device_lost: AtomicBool::new(false), counters, format });
 
     (
         FrameSender { shared: Arc::clone(&shared), spare: None },

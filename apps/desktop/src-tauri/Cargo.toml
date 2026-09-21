@@ -1,0 +1,45 @@
+[package]
+name        = "rincon-desktop"
+description = "The Rincon desktop shell: a thin Tauri wrapper over rincon-ipc."
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.85"
+license      = "MIT"
+authors      = ["Rincon contributors"]
+publish      = false
+
+# Its own workspace, on purpose. Tauri needs webkit2gtk on Linux, and pulling that into the
+# root workspace would mean every `cargo test` in CI had to install GTK to test a WAV header.
+# The logic this shell wraps lives in `rincon-ipc`, which *is* in the root workspace and is
+# tested on every platform.
+[workspace]
+
+[lib]
+name       = "rincon_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+path       = "src/lib.rs"
+
+[[bin]]
+name = "rincon-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+rincon-core      = { path = "../../../crates/rincon-core" }
+rincon-audio     = { path = "../../../crates/rincon-audio", features = ["loopback"] }
+rincon-control   = { path = "../../../crates/rincon-control" }
+rincon-discovery = { path = "../../../crates/rincon-discovery" }
+rincon-engine    = { path = "../../../crates/rincon-engine" }
+rincon-ipc       = { path = "../../../crates/rincon-ipc" }
+serde            = { version = "1", features = ["derive"] }
+tauri            = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+
+[profile.release]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+panic         = "abort"
+strip         = "symbols"

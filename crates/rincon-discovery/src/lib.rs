@@ -88,7 +88,10 @@ impl DeviceDiscovery for SsdpDiscovery {
 /// rediscovers and matches on the stable identity rather than the address — which is the whole
 /// reason [`rincon_core::device::DeviceId`] exists.
 #[must_use]
-pub fn find_by_id<'a>(outcome: &'a ScanOutcome, id: &rincon_core::device::DeviceId) -> Option<&'a Device> {
+pub fn find_by_id<'a>(
+    outcome: &'a ScanOutcome,
+    id: &rincon_core::device::DeviceId,
+) -> Option<&'a Device> {
     outcome.devices.iter().find(|device| &device.id == id)
 }
 

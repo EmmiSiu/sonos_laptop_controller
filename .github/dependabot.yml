@@ -1,0 +1,41 @@
+# Dependency updates, grouped so that a green week produces one PR rather than eleven.
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch bumps are reviewed as a batch: individually they are noise, together they are a
+      # five-minute check of the CI run.
+      patch:
+        update-types: [patch]
+      # These move together or not at all.
+      tokio-stack:
+        patterns: ["tokio*", "hyper*", "axum*", "tower*", "reqwest"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /apps/desktop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      patch:
+        update-types: [patch, minor]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"
+    # Actions are pinned by SHA (RQ-SEC-015); Dependabot updates the pin and the trailing
+    # version comment together.
